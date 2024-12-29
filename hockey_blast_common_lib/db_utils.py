@@ -1,11 +1,7 @@
 import sys
 import os
 
-# Add the project root directory to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from db.models import Human
-from db.db_connection import create_session
+from models import Human
 
 def get_fake_human_for_stats(session):
     first_name = "Fake"

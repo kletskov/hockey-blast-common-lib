@@ -4,6 +4,13 @@ from sqlalchemy.orm import sessionmaker
 
 # Database connection parameters per organization
 DB_PARAMS = {
+    "hockey-blast-radonly": {
+        "dbname": "hockey_blast",
+        "user": "read_only_user",
+        "password": "hockey-blast",
+        "host": "localhost",
+        "port": 5432
+    },
     "sharksice": {
         "dbname": "hockey_blast",
         "user": "read_only_user",
