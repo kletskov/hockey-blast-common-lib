@@ -12,7 +12,6 @@ setup(
         "Flask-SQLAlchemy",  # For Flask database interactions
         "SQLAlchemy",  # For database interactions
         "requests",    # For HTTP requests
-        "psycopg2",    # For PostgreSQL database connections
     ],
     python_requires='>=3.7',  # Specify the Python version compatibility
 )

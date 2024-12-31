@@ -2,6 +2,7 @@ import sys
 import os
 
 from models import Human
+from db_connection import create_session
 
 def get_fake_human_for_stats(session):
     first_name = "Fake"
@@ -19,3 +20,7 @@ def get_fake_human_for_stats(session):
     session.commit()  # Commit to get the human.id
 
     return human.id
+
+# session = create_session("hockey-blast-radonly")
+# human_id = get_fake_human_for_stats(session)
+# print(f"Human ID: {human_id}")
