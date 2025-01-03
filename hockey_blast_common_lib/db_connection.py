@@ -11,27 +11,6 @@ DB_PARAMS = {
         "host": "localhost",
         "port": 5432
     },
-    "sharksice": {
-        "dbname": "hockey_blast",
-        "user": "read_only_user",
-        "password": "hockey-blast",
-        "host": "localhost",
-        "port": 5432
-    },
-    "caha": {
-        "dbname": "hockey_blast",
-        "user": "read_only_user",
-        "password": "hockey-blast",
-        "host": "localhost",
-        "port": 5432
-    },
-    "tvice": {
-        "dbname": "hockey_blast",
-        "user": "read_only_user",
-        "password": "hockey-blast",
-        "host": "localhost",
-        "port": 5432
-    },
 }
 
 def get_db_params(config_name):
