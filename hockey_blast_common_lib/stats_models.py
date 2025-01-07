@@ -1,5 +1,6 @@
-from .models import db
+from models import db
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.orm import synonym
 
 class BaseStatsHuman(db.Model):
     __abstract__ = True
@@ -172,6 +173,7 @@ class BaseStatsScorekeeper(db.Model):
 class OrgStatsHuman(BaseStatsHuman):
     __tablename__ = 'org_stats_human'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -184,6 +186,7 @@ class OrgStatsHuman(BaseStatsHuman):
 class DivisionStatsHuman(BaseStatsHuman):
     __tablename__ = 'division_stats_human'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -196,6 +199,7 @@ class DivisionStatsHuman(BaseStatsHuman):
 class OrgStatsSkater(BaseStatsSkater):
     __tablename__ = 'org_stats_skater'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -208,6 +212,7 @@ class OrgStatsSkater(BaseStatsSkater):
 class DivisionStatsSkater(BaseStatsSkater):
     __tablename__ = 'division_stats_skater'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -220,6 +225,7 @@ class DivisionStatsSkater(BaseStatsSkater):
 class OrgStatsGoalie(BaseStatsGoalie):
     __tablename__ = 'org_stats_goalie'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -232,6 +238,7 @@ class OrgStatsGoalie(BaseStatsGoalie):
 class DivisionStatsGoalie(BaseStatsGoalie):
     __tablename__ = 'division_stats_goalie'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -245,6 +252,7 @@ class DivisionStatsGoalie(BaseStatsGoalie):
 class OrgStatsReferee(BaseStatsReferee):
     __tablename__ = 'org_stats_referee'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -257,6 +265,7 @@ class OrgStatsReferee(BaseStatsReferee):
 class DivisionStatsReferee(BaseStatsReferee):
     __tablename__ = 'division_stats_referee'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -270,6 +279,7 @@ class DivisionStatsReferee(BaseStatsReferee):
 class OrgStatsScorekeeper(BaseStatsScorekeeper):
     __tablename__ = 'org_stats_scorekeeper'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -282,6 +292,7 @@ class OrgStatsScorekeeper(BaseStatsScorekeeper):
 class DivisionStatsScorekeeper(BaseStatsScorekeeper):
     __tablename__ = 'division_stats_scorekeeper'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -294,6 +305,7 @@ class DivisionStatsScorekeeper(BaseStatsScorekeeper):
 class OrgStatsDailyHuman(BaseStatsHuman):
     __tablename__ = 'org_stats_daily_human'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @classmethod
     def get_aggregation_column(cls):
@@ -306,6 +318,7 @@ class OrgStatsDailyHuman(BaseStatsHuman):
 class OrgStatsWeeklyHuman(BaseStatsHuman):
     __tablename__ = 'org_stats_weekly_human'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @classmethod
     def get_aggregation_column(cls):
@@ -318,6 +331,7 @@ class OrgStatsWeeklyHuman(BaseStatsHuman):
 class DivisionStatsDailyHuman(BaseStatsHuman):
     __tablename__ = 'division_stats_daily_human'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @classmethod
     def get_aggregation_column(cls):
@@ -330,6 +344,7 @@ class DivisionStatsDailyHuman(BaseStatsHuman):
 class DivisionStatsWeeklyHuman(BaseStatsHuman):
     __tablename__ = 'division_stats_weekly_human'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @classmethod
     def get_aggregation_column(cls):
@@ -342,6 +357,7 @@ class DivisionStatsWeeklyHuman(BaseStatsHuman):
 class OrgStatsDailySkater(BaseStatsSkater):
     __tablename__ = 'org_stats_daily_skater'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -354,6 +370,7 @@ class OrgStatsDailySkater(BaseStatsSkater):
 class OrgStatsWeeklySkater(BaseStatsSkater):
     __tablename__ = 'org_stats_weekly_skater'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -366,6 +383,7 @@ class OrgStatsWeeklySkater(BaseStatsSkater):
 class DivisionStatsDailySkater(BaseStatsSkater):
     __tablename__ = 'division_stats_daily_skater'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -378,6 +396,7 @@ class DivisionStatsDailySkater(BaseStatsSkater):
 class DivisionStatsWeeklySkater(BaseStatsSkater):
     __tablename__ = 'division_stats_weekly_skater'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -390,6 +409,7 @@ class DivisionStatsWeeklySkater(BaseStatsSkater):
 class OrgStatsDailyGoalie(BaseStatsGoalie):
     __tablename__ = 'org_stats_daily_goalie'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -402,6 +422,7 @@ class OrgStatsDailyGoalie(BaseStatsGoalie):
 class OrgStatsWeeklyGoalie(BaseStatsGoalie):
     __tablename__ = 'org_stats_weekly_goalie'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -414,6 +435,7 @@ class OrgStatsWeeklyGoalie(BaseStatsGoalie):
 class DivisionStatsDailyGoalie(BaseStatsGoalie):
     __tablename__ = 'division_stats_daily_goalie'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -426,6 +448,7 @@ class DivisionStatsDailyGoalie(BaseStatsGoalie):
 class DivisionStatsWeeklyGoalie(BaseStatsGoalie):
     __tablename__ = 'division_stats_weekly_goalie'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -438,6 +461,7 @@ class DivisionStatsWeeklyGoalie(BaseStatsGoalie):
 class OrgStatsDailyReferee(BaseStatsReferee):
     __tablename__ = 'org_stats_daily_referee'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -450,6 +474,7 @@ class OrgStatsDailyReferee(BaseStatsReferee):
 class OrgStatsWeeklyReferee(BaseStatsReferee):
     __tablename__ = 'org_stats_weekly_referee'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -462,6 +487,7 @@ class OrgStatsWeeklyReferee(BaseStatsReferee):
 class DivisionStatsDailyReferee(BaseStatsReferee):
     __tablename__ = 'division_stats_daily_referee'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -474,6 +500,7 @@ class DivisionStatsDailyReferee(BaseStatsReferee):
 class DivisionStatsWeeklyReferee(BaseStatsReferee):
     __tablename__ = 'division_stats_weekly_referee'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -486,6 +513,7 @@ class DivisionStatsWeeklyReferee(BaseStatsReferee):
 class OrgStatsDailyScorekeeper(BaseStatsScorekeeper):
     __tablename__ = 'org_stats_daily_scorekeeper'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -498,6 +526,7 @@ class OrgStatsDailyScorekeeper(BaseStatsScorekeeper):
 class OrgStatsWeeklyScorekeeper(BaseStatsScorekeeper):
     __tablename__ = 'org_stats_weekly_scorekeeper'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    aggregation_id = synonym('org_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -510,6 +539,7 @@ class OrgStatsWeeklyScorekeeper(BaseStatsScorekeeper):
 class DivisionStatsDailyScorekeeper(BaseStatsScorekeeper):
     __tablename__ = 'division_stats_daily_scorekeeper'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):
@@ -522,6 +552,7 @@ class DivisionStatsDailyScorekeeper(BaseStatsScorekeeper):
 class DivisionStatsWeeklyScorekeeper(BaseStatsScorekeeper):
     __tablename__ = 'division_stats_weekly_scorekeeper'
     division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
+    aggregation_id = synonym('division_id')
 
     @declared_attr
     def aggregation_type(cls):

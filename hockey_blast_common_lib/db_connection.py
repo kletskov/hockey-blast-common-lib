@@ -11,6 +11,15 @@ DB_PARAMS = {
         "host": "localhost",
         "port": 5432
     },
+
+    "boss": {
+        "dbname": "hockey_blast",
+        "user": "boss",
+        "password": "WrongPassword",
+        "host": "localhost",
+        "port": 5432
+    },
+
 }
 
 def get_db_params(config_name):
