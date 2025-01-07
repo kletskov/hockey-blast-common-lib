@@ -1,4 +1,4 @@
-from models import db
+from hockey_blast_common_lib.models import db
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import synonym
 

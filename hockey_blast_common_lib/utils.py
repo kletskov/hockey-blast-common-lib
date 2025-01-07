@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timedelta
 
 
-from models import Organization, Human, Division
+from hockey_blast_common_lib.models import Organization, Human, Division
 from sqlalchemy.sql import func
 
 

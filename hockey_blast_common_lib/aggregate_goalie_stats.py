@@ -1,8 +1,12 @@
 import sys, os
+
+# Add the package directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from datetime import datetime, timedelta
 import sqlalchemy
 from options import not_human_names
-from models import  Game, GameRoster
+from hockey_blast_common_lib.models import  Game, GameRoster
 from stats_models import OrgStatsGoalie, DivisionStatsGoalie, OrgStatsWeeklyGoalie, OrgStatsDailyGoalie, DivisionStatsWeeklyGoalie, DivisionStatsDailyGoalie
 from db_connection import create_session
 from sqlalchemy.sql import func, case

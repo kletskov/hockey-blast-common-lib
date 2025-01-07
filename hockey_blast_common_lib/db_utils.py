@@ -1,7 +1,7 @@
 import sys
 import os
 
-from models import Human
+from hockey_blast_common_lib.models import Human
 from db_connection import create_session
 
 def get_fake_human_for_stats(session):
