@@ -4,9 +4,6 @@ import os
 # Add the package directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from datetime import datetime, timedelta
-
-
 from hockey_blast_common_lib.models import Organization, Human, Division
 from sqlalchemy.sql import func
 
