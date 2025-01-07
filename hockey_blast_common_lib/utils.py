@@ -1,5 +1,9 @@
 import sys
 import os
+
+# Add the package directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from datetime import datetime, timedelta
 
 
@@ -63,3 +67,26 @@ def get_division_ids_for_last_season_in_all_leagues(session, org_id):
 def get_all_division_ids_for_org(session, org_id):
     division_ids_for_org = session.query(Division.id).filter_by(org_id=org_id).all()
     return [division_id.id for division_id in division_ids_for_org]
+
+def get_fake_human_for_stats(session):
+    first_name = "Fake"
+    middle_name = "Stats"
+    last_name = "Human"
+
+    # Check if the human already exists
+    existing_human = session.query(Human).filter_by(first_name=first_name, middle_name=middle_name, last_name=last_name).first()
+    if existing_human:
+        return existing_human.id
+
+    # Create a new human
+    human = Human(first_name=first_name, middle_name=middle_name, last_name=last_name)
+    session.add(human)
+    session.commit()  # Commit to get the human.id
+
+    return human.id
+
+# TEST DB CONNECTION, PERMISSIONS...
+# from hockey_blast_common_lib.db_connection import create_session
+# session = create_session("hockey-blast-radonly")
+# human_id = get_fake_human_for_stats(session)
+# print(f"Human ID: {human_id}")
