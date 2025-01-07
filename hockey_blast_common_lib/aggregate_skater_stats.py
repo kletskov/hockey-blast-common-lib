@@ -5,15 +5,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timedelta
 import sqlalchemy
-from options import not_human_names
 
 from hockey_blast_common_lib.models import Game, Goal, Penalty, GameRoster
 from hockey_blast_common_lib.stats_models import OrgStatsSkater, DivisionStatsSkater, OrgStatsWeeklySkater, OrgStatsDailySkater, DivisionStatsWeeklySkater, DivisionStatsDailySkater
 from hockey_blast_common_lib.db_connection import create_session
 from sqlalchemy.sql import func, case
-from hockey_blast_common_lib.options import parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS
+from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS
 from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues
-from hockey_blast_common_lib.sqlalchemy import func, case, and_
+from sqlalchemy import func, case, and_
 
 def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_filter_out, filter_human_id=None, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
