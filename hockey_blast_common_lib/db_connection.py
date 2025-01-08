@@ -4,8 +4,16 @@ from sqlalchemy.orm import sessionmaker
 
 # Database connection parameters per organization
 DB_PARAMS = {
-    "hockey-blast-radonly": {
+    "frontend": {
         "dbname": "hockey_blast",
+        "user": "read_only_user",
+        "password": "hockey-blast",
+        "host": "localhost",
+        "port": 5432
+    },
+
+    "frontend-sample-db": {
+        "dbname": "hockey_blast_sample",
         "user": "read_only_user",
         "password": "hockey-blast",
         "host": "localhost",
