@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 DB_PARAMS = {
     "frontend": {
         "dbname": "hockey_blast",
-        "user": "read_only_user",
+        "user": "frontend_user",
         "password": "hockey-blast",
         "host": "localhost",
         "port": 5432
@@ -14,7 +14,7 @@ DB_PARAMS = {
 
     "frontend-sample-db": {
         "dbname": "hockey_blast_sample",
-        "user": "read_only_user",
+        "user": "frontend_user",
         "password": "hockey-blast",
         "host": "localhost",
         "port": 5432
