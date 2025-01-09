@@ -1,2 +1,2 @@
-include *.sh
-include *.gz
+include hockey_blast_common_lib/*.sh
+include hockey_blast_common_lib/*.gz
