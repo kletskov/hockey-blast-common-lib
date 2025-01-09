@@ -16,19 +16,22 @@ SUPERUSER_PASSWORD="your_superuser_password"
 export PGPASSWORD=$SUPERUSER_PASSWORD
 
 # Drop the existing database if it exists
-psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT --command="SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '$DB_NAME' AND pid <> pg_backend_pid();"
-psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT --command="DROP DATABASE IF EXISTS $DB_NAME"
+psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --command="SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '$DB_NAME' AND pid <> pg_backend_pid();"
+psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --command="DROP DATABASE IF EXISTS $DB_NAME"
 
 # Create a new database
-psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT --command="CREATE DATABASE $DB_NAME OWNER $SUPERUSER"
+psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --command="CREATE DATABASE $DB_NAME OWNER $SUPERUSER"
 
-# Export PGPASSWORD for read-only user
+# Export PGPASSWORD for frontend_user user
 export PGPASSWORD=$DB_PASSWORD
 
 # Restore the database from the dump file with --no-owner option
 gunzip -c $COMPRESSED_DUMP_FILE | pg_restore --username=$DB_USER --host=$DB_HOST --port=$DB_PORT --dbname=$DB_NAME --format=custom --no-owner
 
-# Grant necessary permissions to the read-only user
-psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT --dbname=$DB_NAME --command="GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO frontend_user"
+# Create the frontend_user if it does not exist
+psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT --dbname=$DB_NAME --command="DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'frontend_user') THEN CREATE ROLE frontend_user LOGIN PASSWORD '$DB_PASSWORD'; END IF; END \$\$;"
+
+# Grant necessary permissions to the  user
+psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT --dbname=$DB_NAME  --command="GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO frontend_user"
 
 echo "Database restore completed: $DB_NAME"
