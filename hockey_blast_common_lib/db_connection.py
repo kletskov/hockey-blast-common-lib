@@ -1,33 +1,32 @@
-# import psycopg2
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # Database connection parameters per organization
 DB_PARAMS = {
     "frontend": {
-        "dbname": "hockey_blast",
-        "user": "frontend_user",
-        "password": "hockey-blast",
-        "host": "localhost",
-        "port": 5432
+        "dbname": os.getenv("DB_NAME", "hockey_blast"),
+        "user": os.getenv("DB_USER", "frontend_user"),
+        "password": os.getenv("DB_PASSWORD", "hockey-blast"),
+        "host": os.getenv("DB_HOST", "localhost"),
+        "port": int(os.getenv("DB_PORT", 5432))
     },
 
     "frontend-sample-db": {
-        "dbname": "hockey_blast_sample",
-        "user": "frontend_user",
-        "password": "hockey-blast",
-        "host": "localhost",
-        "port": 5432
+        "dbname": os.getenv("DB_NAME_SAMPLE", "hockey_blast_sample"),
+        "user": os.getenv("DB_USER_SAMPLE", "frontend_user"),
+        "password": os.getenv("DB_PASSWORD_SAMPLE", "hockey-blast"),
+        "host": os.getenv("DB_HOST_SAMPLE", "localhost"),
+        "port": int(os.getenv("DB_PORT_SAMPLE", 5432))
     },
 
     "boss": {
-        "dbname": "hockey_blast",
-        "user": "boss",
-        "password": "WrongPassword",
-        "host": "localhost",
-        "port": 5432
+        "dbname": os.getenv("DB_NAME_BOSS", "hockey_blast"),
+        "user": os.getenv("DB_USER_BOSS", "boss"),
+        "password": os.getenv("DB_PASSWORD_BOSS", "WrongPassword"),
+        "host": os.getenv("DB_HOST_BOSS", "localhost"),
+        "port": int(os.getenv("DB_PORT_BOSS", 5432))
     },
-
 }
 
 def get_db_params(config_name):
