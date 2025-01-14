@@ -82,8 +82,8 @@ def get_fake_human_for_stats(session):
 
     return human.id
 
-# TEST DB CONNECTION, PERMISSIONS...
+#TEST DB CONNECTION, PERMISSIONS...
 # from hockey_blast_common_lib.db_connection import create_session
-# session = create_session("hockey-blast-radonly")
+# session = create_session("frontend")
 # human_id = get_fake_human_for_stats(session)
 # print(f"Human ID: {human_id}")
