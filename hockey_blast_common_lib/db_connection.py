@@ -20,10 +20,12 @@ DB_PARAMS = {
         "port": int(os.getenv("DB_PORT_SAMPLE", 5432))
     },
 
+# TODO - the section below is just to handle recovery of sample DB where boss user is present
+# Maybe figure out a way to do backup without it and make frontend_user own the sample? 
     "boss": {
         "dbname": os.getenv("DB_NAME_BOSS", "hockey_blast"),
         "user": os.getenv("DB_USER_BOSS", "boss"),
-        "password": os.getenv("DB_PASSWORD_BOSS", "WrongPassword"),
+        "password": os.getenv("DB_PASSWORD_BOSS", "boss"),
         "host": os.getenv("DB_HOST_BOSS", "localhost"),
         "port": int(os.getenv("DB_PORT_BOSS", 5432))
     },
