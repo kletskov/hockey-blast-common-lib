@@ -26,6 +26,7 @@ packaging==24.2
 pkginfo==1.12.0
 psycopg2==2.9.10
 Pygments==2.18.0
+python-dotenv==1.0.1
 readme_renderer==44.0
 requests==2.32.3
 requests-toolbelt==1.0.0
