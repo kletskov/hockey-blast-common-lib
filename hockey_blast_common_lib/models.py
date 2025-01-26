@@ -159,6 +159,7 @@ class Skill(db.Model):
     skill_value = db.Column(db.Float)  # A number from 0 (NHL) to 100 (pedestrian)
     level_name = db.Column(db.String(100), unique=True)
     level_alternative_name = db.Column(db.String(100))
+    is_seed = db.Column(db.Boolean, nullable=True, default=False)  # New field
     __table_args__ = (
         db.UniqueConstraint('org_id', 'level_name', name='_org_level_name_uc'),
     )

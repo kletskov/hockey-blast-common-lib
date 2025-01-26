@@ -11,7 +11,7 @@ from hockey_blast_common_lib.stats_models import db
 from hockey_blast_common_lib.db_connection import get_db_params
 
 app = Flask(__name__)
-db_params = get_db_params("bosshockey-blast-radonly")
+db_params = get_db_params("boss")
 db_url = f"postgresql://{db_params['user']}:{db_params['password']}@{db_params['host']}:{db_params['port']}/{db_params['dbname']}"
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 
