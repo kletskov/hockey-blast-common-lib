@@ -15,8 +15,9 @@ class Comment(db.Model):
 class Division(db.Model):
     __tablename__ = 'divisions'
     id = db.Column(db.Integer, primary_key=True)
-    league_number = db.Column(db.Integer)
-    season_number = db.Column(db.Integer)
+    league_number = db.Column(db.Integer) # TODO: Deprecate usage and remove (get this info through Season->League)
+    season_number = db.Column(db.Integer) # TODO: Deprecate usage and remove (get this info from Season by season_id)
+    season_id = db.Column(db.Integer, db.ForeignKey('seasons.id'))
     level = db.Column(db.String(100))  # UNIQUE LEVEL NAME
     skill_id = db.Column(db.Integer, db.ForeignKey('skills.id'))  # SKILL LEVEL
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
@@ -295,7 +296,8 @@ class Season(db.Model):
     season_name = db.Column(db.String(100))
     start_date = db.Column(db.Date)
     end_date = db.Column(db.Date)
-    league_number = db.Column(db.Integer)
+    league_number = db.Column(db.Integer)  # TODO: Deprecate usage and remove (get this info from League by league_id)
+    league_id = db.Column(db.Integer, db.ForeignKey('leagues.id'))
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
     __table_args__ = (
         db.UniqueConstraint('org_id', 'league_number', 'season_number', name='_org_league_season_uc'),
