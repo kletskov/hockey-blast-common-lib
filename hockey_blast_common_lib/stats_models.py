@@ -222,6 +222,20 @@ class DivisionStatsSkater(BaseStatsSkater):
     def get_aggregation_column(cls):
         return 'division_id'
 
+class LevelStatsSkater(BaseStatsSkater):
+    __tablename__ = 'level_stats_skater'
+    level_id = db.Column(db.Integer, db.ForeignKey('levels.id'), nullable=False)
+    aggregation_id = synonym('level_id')
+
+    @declared_attr
+    def aggregation_type(cls):
+        return 'level'
+
+    @classmethod
+    def get_aggregation_column(cls):
+        return 'level_id'
+
+
 class OrgStatsGoalie(BaseStatsGoalie):
     __tablename__ = 'org_stats_goalie'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
@@ -561,3 +575,26 @@ class DivisionStatsWeeklyScorekeeper(BaseStatsScorekeeper):
     @classmethod
     def get_aggregation_column(cls):
         return 'division_id'
+
+class LevelsGraphEdge(db.Model):
+    __tablename__ = 'levels_graph_edges'
+    id = db.Column(db.Integer, primary_key=True)
+    from_level_id = db.Column(db.Integer, db.ForeignKey('levels.id'), nullable=False)
+    to_level_id = db.Column(db.Integer, db.ForeignKey('levels.id'), nullable=False)
+    n_connections = db.Column(db.Integer, nullable=False)
+    ppg_ratio = db.Column(db.Float, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('from_level_id', 'to_level_id', name='_from_to_level_uc'),
+    )
+
+class SkillPropagationCorrelation(db.Model):
+    __tablename__ = 'skill_propagation_correlation'
+    id = db.Column(db.Integer, primary_key=True)
+    skill_value_from = db.Column(db.Float, nullable=False)
+    skill_value_to = db.Column(db.Float, nullable=False)
+    ppg_ratio = db.Column(db.Float, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('skill_value_from', 'skill_value_to', 'ppg_ratio', name='_skill_value_ppg_ratio_uc'),
+    )

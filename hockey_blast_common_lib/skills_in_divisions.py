@@ -5,7 +5,7 @@ from collections import defaultdict
 # Add the project root directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hockey_blast_common_lib.models import Game, Division, Skill, Season, League
+from hockey_blast_common_lib.models import Game, Division, Level, Season, League
 from hockey_blast_common_lib.db_connection import create_session
 
 def analyze_levels(org):
@@ -47,72 +47,76 @@ def analyze_levels(org):
 
     session.close()
 
-def fill_missing_skills_in_divisions():
+def reset_skill_values_in_divisions():
     session = create_session("boss")
 
-    # Fetch all records from the Division table where skill_id is null or it's the fake_skill
-    fake_skill = get_fake_skill(session)
-    divisions = session.query(Division).filter(
-        (Division.skill_id == None) | (Division.skill_id == fake_skill.id)
-    ).all()
+    # Fetch all records from the Division table
+    divisions = session.query(Division).all()
 
     for division in divisions:
         # Look up the Skill table using the level from Division
         div_level = division.level
-
         # Query to find the matching Skill
-        skill = session.query(Skill).filter(Skill.org_id == division.org_id, Skill.level_name == div_level).one_or_none()
+        level = session.query(Level).filter(Level.org_id == division.org_id, Level.level_name == div_level).one_or_none()
 
-        if not skill:
+        if not level:
             # If no match found, check each alternative name individually
-            skills = session.query(Skill).filter(Skill.org_id == division.org_id).all()
+            skills = session.query(Level).filter(Level.org_id == division.org_id).all()
             for s in skills:
                 alternative_names = s.level_alternative_name.split(',')
                 if div_level in alternative_names:
-                    skill = s
+                    level = s
                     break
 
-        if not skill:
-            # Create a new Skill with this level_name and skill_value of 49.99
-            skill = Skill(
+        if level:
+            # Assign the skill_value and set skill_propagation_sequence to 0
+            division.level_id = level.id
+            if level.is_seed:
+                level.skill_propagation_sequence = 0
+            else:
+                level.skill_propagation_sequence = -1
+                level.skill_value = -1
+        else:
+            # Add new Skill with values previously used for division
+            new_level = Level(
                 org_id=division.org_id,
-                skill_value=-1.1,
+                skill_value=-1,
                 level_name=division.level,
-                level_alternative_name=''
+                level_alternative_name='',
+                is_seed=False,
+                skill_propagation_sequence=-1
             )
-            session.add(skill)
-            session.commit()  # Commit to get the new level id
-
-        # Assign the new level id to Division.level_id
-        division.skill_id = skill.id
-        print(f"Assigned Skill {skill.skill_value} for Division with name {division.level}")
+            session.add(new_level)
+            session.commit()
+            division.skill_id = new_level.id
+            print(f"Created new Level for Division {division.level}")
 
         # Commit the changes to the Division
         session.commit()
 
-    print("Skill IDs have been populated into the Division table.")
+    print("Level values and propagation sequences have been populated into the Division table.")
 
 def fill_seed_skills():
     session = create_session("boss")
 
     # List of Skill objects based on the provided comments
     skills = [
-        Skill(is_seed=True, org_id=1, skill_value=10.0, level_name='Adult Division 1', level_alternative_name='Senior A'),
-        Skill(is_seed=True, org_id=1, skill_value=20.0, level_name='Adult Division 2', level_alternative_name='Senior B'),
-        Skill(is_seed=True, org_id=1, skill_value=30.0, level_name='Adult Division 3A', level_alternative_name='Senior BB'),
-        Skill(is_seed=True, org_id=1, skill_value=35.0, level_name='Adult Division 3B', level_alternative_name='Senior C'),
-        Skill(is_seed=True, org_id=1, skill_value=40.0, level_name='Adult Division 4A', level_alternative_name='Senior CC'),
-        Skill(is_seed=True, org_id=1, skill_value=45.0, level_name='Adult Division 4B', level_alternative_name='Senior CCC,Senior CCCC'),
-        Skill(is_seed=True, org_id=1, skill_value=50.0, level_name='Adult Division 5A', level_alternative_name='Senior D,Senior DD'),
-        Skill(is_seed=True, org_id=1, skill_value=55.0, level_name='Adult Division 5B', level_alternative_name='Senior DDD'),
-        Skill(is_seed=True, org_id=1, skill_value=60.0, level_name='Adult Division 6A', level_alternative_name='Senior DDDD'),
-        Skill(is_seed=True, org_id=1, skill_value=65.0, level_name='Adult Division 6B', level_alternative_name='Senior DDDDD'),
-        Skill(is_seed=True, org_id=1, skill_value=70.0, level_name='Adult Division 7A', level_alternative_name='Senior E'),
-        Skill(is_seed=True, org_id=1, skill_value=75.0, level_name='Adult Division 7B', level_alternative_name='Senior EE'),
-        Skill(is_seed=True, org_id=1, skill_value=80.0, level_name='Adult Division 8', level_alternative_name='Senior EEE'),
-        Skill(is_seed=True, org_id=1, skill_value=80.0, level_name='Adult Division 8A', level_alternative_name='Senior EEE'),
-        Skill(is_seed=True, org_id=1, skill_value=85.0, level_name='Adult Division 8B', level_alternative_name='Senior EEEE'),
-        Skill(is_seed=True, org_id=1, skill_value=90.0, level_name='Adult Division 9', level_alternative_name='Senior EEEEE')
+        Level(is_seed=True, org_id=1, skill_value=10.0, level_name='Adult Division 1', level_alternative_name='Senior A'),
+        Level(is_seed=True, org_id=1, skill_value=20.0, level_name='Adult Division 2', level_alternative_name='Senior B'),
+        Level(is_seed=True, org_id=1, skill_value=30.0, level_name='Adult Division 3A', level_alternative_name='Senior BB'),
+        Level(is_seed=True, org_id=1, skill_value=35.0, level_name='Adult Division 3B', level_alternative_name='Senior C'),
+        Level(is_seed=True, org_id=1, skill_value=40.0, level_name='Adult Division 4A', level_alternative_name='Senior CC'),
+        Level(is_seed=True, org_id=1, skill_value=45.0, level_name='Adult Division 4B', level_alternative_name='Senior CCC,Senior CCCC'),
+        Level(is_seed=True, org_id=1, skill_value=50.0, level_name='Adult Division 5A', level_alternative_name='Senior D,Senior DD'),
+        Level(is_seed=True, org_id=1, skill_value=55.0, level_name='Adult Division 5B', level_alternative_name='Senior DDD'),
+        Level(is_seed=True, org_id=1, skill_value=60.0, level_name='Adult Division 6A', level_alternative_name='Senior DDDD'),
+        Level(is_seed=True, org_id=1, skill_value=65.0, level_name='Adult Division 6B', level_alternative_name='Senior DDDDD'),
+        Level(is_seed=True, org_id=1, skill_value=70.0, level_name='Adult Division 7A', level_alternative_name='Senior E'),
+        Level(is_seed=True, org_id=1, skill_value=75.0, level_name='Adult Division 7B', level_alternative_name='Senior EE'),
+        Level(is_seed=True, org_id=1, skill_value=80.0, level_name='Adult Division 8', level_alternative_name='Senior EEE'),
+        Level(is_seed=True, org_id=1, skill_value=80.0, level_name='Adult Division 8A', level_alternative_name='Senior EEE'),
+        Level(is_seed=True, org_id=1, skill_value=85.0, level_name='Adult Division 8B', level_alternative_name='Senior EEEE'),
+        Level(is_seed=True, org_id=1, skill_value=90.0, level_name='Adult Division 9', level_alternative_name='Senior EEEEE')
     ]
 
     for skill in skills:
@@ -123,9 +127,9 @@ def fill_seed_skills():
 
 def get_fake_skill(session):
     # Create a special fake Skill with org_id == -1 and skill_value == -1
-    fake_skill = session.query(Skill).filter_by(org_id=1, level_name='Fake Skill').first()
+    fake_skill = session.query(Level).filter_by(org_id=1, level_name='Fake Skill').first()
     if not fake_skill:
-        fake_skill = Skill(
+        fake_skill = Level(
             org_id=1,
             skill_value=-1,
             level_name='Fake Skill',
@@ -150,7 +154,7 @@ def delete_all_skills():
     fake_skill = get_fake_skill(session)
     assign_fake_skill_to_divisions(session, fake_skill)
     # Delete all Skill records except the fake skill
-    session.query(Skill).filter(Skill.id != fake_skill.id).delete(synchronize_session=False)
+    session.query(Level).filter(Level.id != fake_skill.id).delete(synchronize_session=False)
     session.commit()
     print("All Skill records except the fake skill have been deleted.")
 
@@ -184,7 +188,7 @@ def populate_league_ids():
 
 if __name__ == "__main__":
     # delete_all_skills()
-    # fill_seed_skills()
-    # fill_missing_skills_in_divisions()
+    #fill_seed_skills()
+    reset_skill_values_in_divisions()
     #populate_season_ids()  # Call the function to populate season_ids
-    populate_league_ids()  # Call the new function to populate league_ids
+    #populate_league_ids()  # Call the new function to populate league_ids

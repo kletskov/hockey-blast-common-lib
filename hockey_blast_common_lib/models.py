@@ -18,8 +18,8 @@ class Division(db.Model):
     league_number = db.Column(db.Integer) # TODO: Deprecate usage and remove (get this info through Season->League)
     season_number = db.Column(db.Integer) # TODO: Deprecate usage and remove (get this info from Season by season_id)
     season_id = db.Column(db.Integer, db.ForeignKey('seasons.id'))
-    level = db.Column(db.String(100))  # UNIQUE LEVEL NAME
-    skill_id = db.Column(db.Integer, db.ForeignKey('skills.id'))  # SKILL LEVEL
+    level = db.Column(db.String(100)) # Obsolete, use skill_id instead
+    level_id = db.Column(db.Integer, db.ForeignKey('levels.id')) # New field
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
     __table_args__ = (
         db.UniqueConstraint('org_id', 'league_number', 'season_number', 'level', name='_org_league_season_level_uc'),
@@ -153,14 +153,15 @@ class League(db.Model):
         db.UniqueConstraint('org_id', 'league_number', name='_org_league_number_uc'),
     )
 
-class Skill(db.Model):
-    __tablename__ = 'skills'
+class Level(db.Model):
+    __tablename__ = 'levels'
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
     skill_value = db.Column(db.Float)  # A number from 0 (NHL) to 100 (pedestrian)
     level_name = db.Column(db.String(100), unique=True)
     level_alternative_name = db.Column(db.String(100))
     is_seed = db.Column(db.Boolean, nullable=True, default=False)  # New field
+    skill_propagation_sequence = db.Column(db.Integer, nullable=True, default=-1)
     __table_args__ = (
         db.UniqueConstraint('org_id', 'level_name', name='_org_level_name_uc'),
     )

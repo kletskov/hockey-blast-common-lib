@@ -6,12 +6,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timedelta
 import sqlalchemy
 
-from hockey_blast_common_lib.models import Game, Goal, Penalty, GameRoster
-from hockey_blast_common_lib.stats_models import OrgStatsSkater, DivisionStatsSkater, OrgStatsWeeklySkater, OrgStatsDailySkater, DivisionStatsWeeklySkater, DivisionStatsDailySkater
+from hockey_blast_common_lib.models import Game, Goal, Penalty, GameRoster, Organization, Division
+from hockey_blast_common_lib.stats_models import OrgStatsSkater, DivisionStatsSkater, OrgStatsWeeklySkater, OrgStatsDailySkater, DivisionStatsWeeklySkater, DivisionStatsDailySkater, LevelStatsSkater
 from hockey_blast_common_lib.db_connection import create_session
 from sqlalchemy.sql import func, case
-from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS
-from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues
+from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
+from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
 from sqlalchemy import func, case, and_
 
 def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_filter_out, filter_human_id=None, aggregation_window=None):
@@ -35,6 +35,10 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
             StatsModel = DivisionStatsSkater
         min_games = MIN_GAMES_FOR_DIVISION_STATS
         filter_condition = Game.division_id == aggregation_id
+    elif aggregation_type == 'level':
+        StatsModel = LevelStatsSkater
+        min_games = MIN_GAMES_FOR_LEVEL_STATS
+        filter_condition = Division.level_id == aggregation_id
     else:
         raise ValueError("Invalid aggregation type")
 
@@ -307,20 +311,38 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
     print(f"\r{total_items}/{total_items} (100.00%)")
     print("\nDone.")
 
-# Example usage
 if __name__ == "__main__":
-    args = parse_args()
-    org_alias = args.org
     session = create_session("boss")
-    org_id = get_org_id_from_alias(session, org_alias)
 
-    division_ids = get_division_ids_for_last_season_in_all_leagues(session, org_id)
-    print(f"Aggregating skater stats for {len(division_ids)} divisions in {org_alias}...")
-    for division_id in division_ids:
-        aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None)
-        aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Weekly')
-        aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Daily')
+    # Get all org_id present in the Organization table
+    org_ids = session.query(Organization.id).all()
+    org_ids = [org_id[0] for org_id in org_ids]
 
-    aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None)
-    aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Weekly')
-    aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Daily')
+    # for org_id in org_ids:
+    #     division_ids = get_all_division_ids_for_org(session, org_id)
+    #     print(f"Aggregating skater stats for {len(division_ids)} divisions in org_id {org_id}...")
+    #     total_divisions = len(division_ids)
+    #     processed_divisions = 0
+        # for division_id in division_ids:
+        #     aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None)
+        #     aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Weekly')
+        #     aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Daily')
+        #     processed_divisions += 1
+        #     print(f"\rProcessed {processed_divisions}/{total_divisions} divisions ({(processed_divisions/total_divisions)*100:.2f}%)", end="")
+
+        # aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None)
+        # aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Weekly')
+        # aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Daily')
+        
+        # Aggregate by level
+    level_ids = session.query(Division.level_id).distinct().all()
+    level_ids = [level_id[0] for level_id in level_ids]
+    total_levels = len(level_ids)
+    processed_levels = 0
+    for level_id in level_ids:
+        if level_id is None:
+            continue
+        print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
+        processed_levels += 1
+        aggregate_skater_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, filter_human_id=None)
+    print("\nDone.")
