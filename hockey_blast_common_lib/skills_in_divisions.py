@@ -140,6 +140,5 @@ def populate_league_ids():
 if __name__ == "__main__":
     # delete_all_skills()
     #fill_seed_skills()
-    reset_skill_values_in_divisions()
     #populate_season_ids()  # Call the function to populate season_ids
     #populate_league_ids()  # Call the new function to populate league_ids
