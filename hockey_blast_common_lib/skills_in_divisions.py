@@ -47,55 +47,6 @@ def analyze_levels(org):
 
     session.close()
 
-def reset_skill_values_in_divisions():
-    session = create_session("boss")
-
-    # Fetch all records from the Division table
-    divisions = session.query(Division).all()
-
-    for division in divisions:
-        # Look up the Skill table using the level from Division
-        div_level = division.level
-        # Query to find the matching Skill
-        level = session.query(Level).filter(Level.org_id == division.org_id, Level.level_name == div_level).one_or_none()
-
-        if not level:
-            # If no match found, check each alternative name individually
-            skills = session.query(Level).filter(Level.org_id == division.org_id).all()
-            for s in skills:
-                alternative_names = s.level_alternative_name.split(',')
-                if div_level in alternative_names:
-                    level = s
-                    break
-
-        if level:
-            # Assign the skill_value and set skill_propagation_sequence to 0
-            division.level_id = level.id
-            if level.is_seed:
-                level.skill_propagation_sequence = 0
-            else:
-                level.skill_propagation_sequence = -1
-                level.skill_value = -1
-        else:
-            # Add new Skill with values previously used for division
-            new_level = Level(
-                org_id=division.org_id,
-                skill_value=-1,
-                level_name=division.level,
-                level_alternative_name='',
-                is_seed=False,
-                skill_propagation_sequence=-1
-            )
-            session.add(new_level)
-            session.commit()
-            division.skill_id = new_level.id
-            print(f"Created new Level for Division {division.level}")
-
-        # Commit the changes to the Division
-        session.commit()
-
-    print("Level values and propagation sequences have been populated into the Division table.")
-
 def fill_seed_skills():
     session = create_session("boss")
 

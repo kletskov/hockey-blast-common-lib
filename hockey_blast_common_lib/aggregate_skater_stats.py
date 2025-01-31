@@ -6,16 +6,27 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timedelta
 import sqlalchemy
 
-from hockey_blast_common_lib.models import Game, Goal, Penalty, GameRoster, Organization, Division
+from hockey_blast_common_lib.models import Game, Goal, Penalty, GameRoster, Organization, Division, Human, Level
 from hockey_blast_common_lib.stats_models import OrgStatsSkater, DivisionStatsSkater, OrgStatsWeeklySkater, OrgStatsDailySkater, DivisionStatsWeeklySkater, DivisionStatsDailySkater, LevelStatsSkater
 from hockey_blast_common_lib.db_connection import create_session
 from sqlalchemy.sql import func, case
 from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
 from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
 from sqlalchemy import func, case, and_
+from collections import defaultdict
 
-def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_filter_out, filter_human_id=None, aggregation_window=None):
+def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_filter_out, debug_human_id=None, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
+
+    # Get the name of the aggregation, for debug purposes
+    if aggregation_type == 'org':
+        aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+    elif aggregation_type == 'division':
+        aggregation_name = session.query(Division).filter(Division.id == aggregation_id).first().level
+    elif aggregation_type == 'level':
+        aggregation_name = session.query(Level).filter(Level.id == aggregation_id).first().level_name
+    else:
+        aggregation_name = "Unknown"
 
     if aggregation_type == 'org':
         if aggregation_window == 'Daily':
@@ -39,6 +50,10 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         StatsModel = LevelStatsSkater
         min_games = MIN_GAMES_FOR_LEVEL_STATS
         filter_condition = Division.level_id == aggregation_id
+        # Add filter to only include games for the last 5 years
+        # five_years_ago = datetime.now() - timedelta(days=5*365)
+        # level_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP) >= five_years_ago
+        # filter_condition = filter_condition & level_window_filter
     else:
         raise ValueError("Invalid aggregation type")
 
@@ -63,8 +78,8 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
 
     # Filter for specific human_id if provided
     human_filter = []
-    if filter_human_id:
-        human_filter = [GameRoster.human_id == filter_human_id]
+    # if debug_human_id:
+    #     human_filter = [GameRoster.human_id == debug_human_id]
 
     # Aggregate games played for each human in each division, excluding goalies
     games_played_stats = session.query(
@@ -72,7 +87,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         GameRoster.human_id,
         func.count(Game.id).label('games_played'),
         func.array_agg(Game.id).label('game_ids')
-    ).join(GameRoster, Game.id == GameRoster.game_id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, GameRoster.human_id).all()
+    ).join(GameRoster, Game.id == GameRoster.game_id).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, GameRoster.human_id).all()
 
     # Aggregate goals for each human in each division, excluding goalies
     goals_stats = session.query(
@@ -80,7 +95,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         Goal.goal_scorer_id.label('human_id'),
         func.count(Goal.id).label('goals'),
         func.array_agg(Goal.game_id).label('goal_game_ids')
-    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.goal_scorer_id == GameRoster.human_id)).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.goal_scorer_id).all()
+    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.goal_scorer_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.goal_scorer_id).all()
 
     # Aggregate assists for each human in each division, excluding goalies
     assists_stats = session.query(
@@ -88,14 +103,14 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         Goal.assist_1_id.label('human_id'),
         func.count(Goal.id).label('assists'),
         func.array_agg(Goal.game_id).label('assist_game_ids')
-    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.assist_1_id == GameRoster.human_id)).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.assist_1_id).all()
+    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.assist_1_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.assist_1_id).all()
 
     assists_stats_2 = session.query(
         Game.org_id,
         Goal.assist_2_id.label('human_id'),
         func.count(Goal.id).label('assists'),
         func.array_agg(Goal.game_id).label('assist_2_game_ids')
-    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.assist_2_id == GameRoster.human_id)).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.assist_2_id).all()
+    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.assist_2_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.assist_2_id).all()
 
     # Aggregate penalties for each human in each division, excluding goalies
     penalties_stats = session.query(
@@ -103,7 +118,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         Penalty.penalized_player_id.label('human_id'),
         func.count(Penalty.id).label('penalties'),
         func.array_agg(Penalty.game_id).label('penalty_game_ids')
-    ).join(Game, Game.id == Penalty.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Penalty.penalized_player_id == GameRoster.human_id)).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Penalty.penalized_player_id).all()
+    ).join(Game, Game.id == Penalty.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Penalty.penalized_player_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Penalty.penalized_player_id).all()
 
     # Combine the results
     stats_dict = {}
@@ -111,6 +126,8 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         if stat.human_id in human_ids_to_filter:
             continue
         key = (aggregation_id, stat.human_id)
+        if stat.games_played < min_games:
+            continue
         stats_dict[key] = {
             'games_played': stat.games_played,
             'goals': 0,
@@ -127,94 +144,26 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         }
 
     for stat in goals_stats:
-        if stat.human_id in human_ids_to_filter:
-            continue
         key = (aggregation_id, stat.human_id)
-        if key not in stats_dict:
-            stats_dict[key] = {
-                'games_played': 0,
-                'goals': stat.goals,
-                'assists': 0,
-                'penalties': 0,
-                'points': stat.goals,  # Initialize points with goals
-                'goals_per_game': 0.0,
-                'points_per_game': 0.0,
-                'assists_per_game': 0.0,
-                'penalties_per_game': 0.0,
-                'game_ids': [],
-                'first_game_id': None,
-                'last_game_id': None
-            }
-        else:
+        if key in stats_dict:
             stats_dict[key]['goals'] += stat.goals
             stats_dict[key]['points'] += stat.goals  # Update points
 
     for stat in assists_stats:
-        if stat.human_id in human_ids_to_filter:
-            continue
         key = (aggregation_id, stat.human_id)
-        if key not in stats_dict:
-            stats_dict[key] = {
-                'games_played': 0,
-                'goals': 0,
-                'assists': stat.assists,
-                'penalties': 0,
-                'points': stat.assists,  # Initialize points with assists
-                'goals_per_game': 0.0,
-                'points_per_game': 0.0,
-                'assists_per_game': 0.0,
-                'penalties_per_game': 0.0,
-                'game_ids': [],
-                'first_game_id': None,
-                'last_game_id': None
-            }
-        else:
+        if key in stats_dict:
             stats_dict[key]['assists'] += stat.assists
             stats_dict[key]['points'] += stat.assists  # Update points
 
     for stat in assists_stats_2:
-        if stat.human_id in human_ids_to_filter:
-            continue
         key = (aggregation_id, stat.human_id)
-        if key not in stats_dict:
-            stats_dict[key] = {
-                'games_played': 0,
-                'goals': 0,
-                'assists': stat.assists,
-                'penalties': 0,
-                'points': stat.assists,  # Initialize points with assists
-                'goals_per_game': 0.0,
-                'points_per_game': 0.0,
-                'assists_per_game': 0.0,
-                'penalties_per_game': 0.0,
-                'game_ids': [],
-                'first_game_id': None,
-                'last_game_id': None
-            }
-        else:
+        if key in stats_dict:
             stats_dict[key]['assists'] += stat.assists
             stats_dict[key]['points'] += stat.assists  # Update points
 
     for stat in penalties_stats:
-        if stat.human_id in human_ids_to_filter:
-            continue
         key = (aggregation_id, stat.human_id)
-        if key not in stats_dict:
-            stats_dict[key] = {
-                'games_played': 0,
-                'goals': 0,
-                'assists': 0,
-                'penalties': stat.penalties,
-                'points': 0,  # Initialize points
-                'goals_per_game': 0.0,
-                'points_per_game': 0.0,
-                'assists_per_game': 0.0,
-                'penalties_per_game': 0.0,
-                'game_ids': [],
-                'first_game_id': None,
-                'last_game_id': None
-            }
-        else:
+        if key in stats_dict:
             stats_dict[key]['penalties'] += stat.penalties
 
     # Calculate per game stats
@@ -237,20 +186,10 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
             stat['first_game_id'] = first_game.id if first_game else None
             stat['last_game_id'] = last_game.id if last_game else None
 
-    # Debug output for totals if filter_human_id is provided
-    if filter_human_id:
-        for key, stat in stats_dict.items():
-            if key[1] == filter_human_id:
-                print(f"Human ID: {filter_human_id}")
-                print(f"Total Games Played: {stat['games_played']}")
-                print(f"Total Goals: {stat['goals']}")
-                print(f"Total Assists: {stat['assists']}")
-                print(f"Total Penalties: {stat['penalties']}")
-
     # Calculate total_in_rank
     total_in_rank = len(stats_dict)
 
-    # Assign ranks
+    # Assign ranks within each level
     def assign_ranks(stats_dict, field):
         sorted_stats = sorted(stats_dict.items(), key=lambda x: x[1][field], reverse=True)
         for rank, (key, stat) in enumerate(sorted_stats, start=1):
@@ -266,13 +205,22 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
     assign_ranks(stats_dict, 'assists_per_game')
     assign_ranks(stats_dict, 'penalties_per_game')
 
+    # Debug output for specific human
+    if debug_human_id:
+        if any(key[1] == debug_human_id for key in stats_dict):
+            human = session.query(Human).filter(Human.id == debug_human_id).first()
+            human_name = f"{human.first_name} {human.last_name}" if human else "Unknown"
+            print(f"For Human {debug_human_id} ({human_name}) for {aggregation_type} {aggregation_id} ({aggregation_name}) , total_in_rank {total_in_rank} and window {aggregation_window}:")
+            for key, stat in stats_dict.items():
+                if key[1] == debug_human_id:
+                    for k, v in stat.items():
+                        print(f"{k}: {v}")
+
     # Insert aggregated stats into the appropriate table with progress output
     total_items = len(stats_dict)
     batch_size = 1000
     for i, (key, stat) in enumerate(stats_dict.items(), 1):
         aggregation_id, human_id = key
-        if stat['games_played'] < min_games:
-            continue
         goals_per_game = stat['goals'] / stat['games_played'] if stat['games_played'] > 0 else 0.0
         points_per_game = (stat['goals'] + stat['assists']) / stat['games_played'] if stat['games_played'] > 0 else 0.0
         assists_per_game = stat['assists'] / stat['games_played'] if stat['games_played'] > 0 else 0.0
@@ -306,33 +254,37 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         # Commit in batches
         if i % batch_size == 0:
             session.commit()
-            print(f"\r{i}/{total_items} ({(i/total_items)*100:.2f}%)", end="")
+            if debug_human_id is None:
+                print(f"\r{i}/{total_items} ({(i/total_items)*100:.2f}%)", end="")
+            
     session.commit()
-    print(f"\r{total_items}/{total_items} (100.00%)")
-    print("\nDone.")
+    if debug_human_id is None:
+        print(f"\r{total_items}/{total_items} (100.00%)")
 
 if __name__ == "__main__":
     session = create_session("boss")
+    human_id_to_debug = 117076
 
     # Get all org_id present in the Organization table
     org_ids = session.query(Organization.id).all()
     org_ids = [org_id[0] for org_id in org_ids]
 
-    # for org_id in org_ids:
-    #     division_ids = get_all_division_ids_for_org(session, org_id)
-    #     print(f"Aggregating skater stats for {len(division_ids)} divisions in org_id {org_id}...")
-    #     total_divisions = len(division_ids)
-    #     processed_divisions = 0
-        # for division_id in division_ids:
-        #     aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None)
-        #     aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Weekly')
-        #     aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Daily')
-        #     processed_divisions += 1
-        #     print(f"\rProcessed {processed_divisions}/{total_divisions} divisions ({(processed_divisions/total_divisions)*100:.2f}%)", end="")
+    for org_id in org_ids:
+        division_ids = get_all_division_ids_for_org(session, org_id)
+        print(f"Aggregating skater stats for {len(division_ids)} divisions in org_id {org_id}...")
+        total_divisions = len(division_ids)
+        processed_divisions = 0
+        for division_id in division_ids:
+            aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+            aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+            processed_divisions += 1
+            if human_id_to_debug is None:
+                print(f"\rProcessed {processed_divisions}/{total_divisions} divisions ({(processed_divisions/total_divisions)*100:.2f}%)", end="")
 
-        # aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None)
-        # aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Weekly')
-        # aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, filter_human_id=None, aggregation_window='Daily')
+        aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+        aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+        aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
         
         # Aggregate by level
     level_ids = session.query(Division.level_id).distinct().all()
@@ -342,7 +294,7 @@ if __name__ == "__main__":
     for level_id in level_ids:
         if level_id is None:
             continue
-        print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
+        if human_id_to_debug is None:
+            print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
         processed_levels += 1
-        aggregate_skater_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, filter_human_id=None)
-    print("\nDone.")
+        aggregate_skater_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)

@@ -583,6 +583,7 @@ class LevelsGraphEdge(db.Model):
     to_level_id = db.Column(db.Integer, db.ForeignKey('levels.id'), nullable=False)
     n_connections = db.Column(db.Integer, nullable=False)
     ppg_ratio = db.Column(db.Float, nullable=False)
+    n_games = db.Column(db.Integer, nullable=False)  # New field to store the number of games
 
     __table_args__ = (
         db.UniqueConstraint('from_level_id', 'to_level_id', name='_from_to_level_uc'),
@@ -597,4 +598,17 @@ class SkillPropagationCorrelation(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('skill_value_from', 'skill_value_to', 'ppg_ratio', name='_skill_value_ppg_ratio_uc'),
+    )
+
+# How PPG changes with INCREASING SKILL VALUES
+class SkillValuePPGRatio(db.Model):
+    __tablename__ = 'skill_value_ppg_ratios'
+    id = db.Column(db.Integer, primary_key=True)
+    from_skill_value = db.Column(db.Float, nullable=False)
+    to_skill_value = db.Column(db.Float, nullable=False)
+    ppg_ratio = db.Column(db.Float, nullable=False)
+    n_games = db.Column(db.Integer, nullable=False)  # New field to store the sum of games
+
+    __table_args__ = (
+        db.UniqueConstraint('from_skill_value', 'to_skill_value', name='_from_to_skill_value_uc'),
     )
