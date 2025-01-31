@@ -106,6 +106,7 @@ class Human(db.Model):
     last_name = db.Column(db.String(100))
     first_date = db.Column(db.Date)
     last_date = db.Column(db.Date)
+    skater_skill_value = db.Column(db.Float, nullable=True)
     __table_args__ = (
         db.UniqueConstraint('first_name', 'middle_name', 'last_name', name='_human_name_uc'),
     )
