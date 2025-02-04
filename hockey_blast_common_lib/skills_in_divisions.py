@@ -137,7 +137,7 @@ def populate_league_ids():
     session.commit()
     print("League IDs have been populated into the Season table.")
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
     # delete_all_skills()
     #fill_seed_skills()
     #populate_season_ids()  # Call the function to populate season_ids

@@ -5,15 +5,30 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timedelta
 import sqlalchemy
-from hockey_blast_common_lib.models import  Game, GameRoster
-from hockey_blast_common_lib.stats_models import OrgStatsGoalie, DivisionStatsGoalie, OrgStatsWeeklyGoalie, OrgStatsDailyGoalie, DivisionStatsWeeklyGoalie, DivisionStatsDailyGoalie
+
+from hockey_blast_common_lib.models import Game, Goal, Penalty, GameRoster, Organization, Division, Human, Level
+from hockey_blast_common_lib.stats_models import OrgStatsGoalie, DivisionStatsGoalie, OrgStatsWeeklyGoalie, OrgStatsDailyGoalie, DivisionStatsWeeklyGoalie, DivisionStatsDailyGoalie, LevelStatsGoalie
 from hockey_blast_common_lib.db_connection import create_session
 from sqlalchemy.sql import func, case
-from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS
+from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
 from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
+from hockey_blast_common_lib.stats_utils import assign_ranks
+from sqlalchemy import func, case, and_
+from collections import defaultdict
 
-def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_filter_out, aggregation_window=None):
+def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_filter_out, debug_human_id=None, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
+
+    # Get the name of the aggregation, for debug purposes
+    if aggregation_type == 'org':
+        aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+        print(f"Aggregating goalie stats for {aggregation_name} with window {aggregation_window}...")
+    elif aggregation_type == 'division':
+        aggregation_name = session.query(Division).filter(Division.id == aggregation_id).first().level
+    elif aggregation_type == 'level':
+        aggregation_name = session.query(Level).filter(Level.id == aggregation_id).first().level_name
+    else:
+        aggregation_name = "Unknown"
 
     if aggregation_type == 'org':
         if aggregation_window == 'Daily':
@@ -33,6 +48,14 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
             StatsModel = DivisionStatsGoalie
         min_games = MIN_GAMES_FOR_DIVISION_STATS
         filter_condition = Game.division_id == aggregation_id
+    elif aggregation_type == 'level':
+        StatsModel = LevelStatsGoalie
+        min_games = MIN_GAMES_FOR_LEVEL_STATS
+        filter_condition = Division.level_id == aggregation_id
+        # Add filter to only include games for the last 5 years
+        five_years_ago = datetime.now() - timedelta(days=5*365)
+        level_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP) >= five_years_ago
+        filter_condition = filter_condition & level_window_filter
     else:
         raise ValueError("Invalid aggregation type")
 
@@ -55,6 +78,11 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
     session.query(StatsModel).filter(StatsModel.aggregation_id == aggregation_id).delete()
     session.commit()
 
+    # Filter for specific human_id if provided
+    human_filter = []
+    # if debug_human_id:
+    #     human_filter = [GameRoster.human_id == debug_human_id]
+
     # Aggregate games played, goals allowed, and shots faced for each goalie
     goalie_stats = session.query(
         GameRoster.human_id,
@@ -62,7 +90,7 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
         func.sum(case((GameRoster.team_id == Game.home_team_id, Game.visitor_final_score), else_=Game.home_final_score)).label('goals_allowed'),
         func.sum(case((GameRoster.team_id == Game.home_team_id, Game.visitor_period_1_shots + Game.visitor_period_2_shots + Game.visitor_period_3_shots + Game.visitor_ot_shots + Game.visitor_so_shots), else_=Game.home_period_1_shots + Game.home_period_2_shots + Game.home_period_3_shots + Game.home_ot_shots + Game.home_so_shots)).label('shots_faced'),
         func.array_agg(Game.id).label('game_ids')
-    ).join(Game, GameRoster.game_id == Game.id).filter(filter_condition, GameRoster.role == 'G').group_by(GameRoster.human_id).all()
+    ).join(Game, GameRoster.game_id == Game.id).join(Division, Game.division_id == Division.id).filter(filter_condition, GameRoster.role.ilike('g')).group_by(GameRoster.human_id).all()
 
     # Combine the results
     stats_dict = {}
@@ -70,6 +98,8 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
         if stat.human_id in human_ids_to_filter:
             continue
         key = (aggregation_id, stat.human_id)
+        if stat.games_played < min_games:
+            continue
         stats_dict[key] = {
             'games_played': stat.games_played,
             'goals_allowed': stat.goals_allowed if stat.goals_allowed is not None else 0,
@@ -102,37 +132,43 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
     # Calculate total_in_rank
     total_in_rank = len(stats_dict)
 
-    # Assign ranks
-    def assign_ranks(stats_dict, field):
-        sorted_stats = sorted(stats_dict.items(), key=lambda x: x[1][field], reverse=True)
-        for rank, (key, stat) in enumerate(sorted_stats, start=1):
-            stats_dict[key][f'{field}_rank'] = rank
-
+    # Assign ranks within each level
     assign_ranks(stats_dict, 'games_played')
-    assign_ranks(stats_dict, 'goals_allowed')
-    assign_ranks(stats_dict, 'goals_allowed_per_game')
+    assign_ranks(stats_dict, 'goals_allowed', reverse_rank=True)
     assign_ranks(stats_dict, 'shots_faced')
+    assign_ranks(stats_dict, 'goals_allowed_per_game', reverse_rank=True)
     assign_ranks(stats_dict, 'save_percentage')
+
+    # Debug output for specific human
+    if debug_human_id:
+        if any(key[1] == debug_human_id for key in stats_dict):
+            human = session.query(Human).filter(Human.id == debug_human_id).first()
+            human_name = f"{human.first_name} {human.last_name}" if human else "Unknown"
+            print(f"For Human {debug_human_id} ({human_name}) for {aggregation_type} {aggregation_id} ({aggregation_name}) , total_in_rank {total_in_rank} and window {aggregation_window}:")
+            for key, stat in stats_dict.items():
+                if key[1] == debug_human_id:
+                    for k, v in stat.items():
+                        print(f"{k}: {v}")
 
     # Insert aggregated stats into the appropriate table with progress output
     total_items = len(stats_dict)
     batch_size = 1000
     for i, (key, stat) in enumerate(stats_dict.items(), 1):
         aggregation_id, human_id = key
-        if stat['games_played'] < min_games:
-            continue
+        goals_allowed_per_game = stat['goals_allowed'] / stat['games_played'] if stat['games_played'] > 0 else 0.0
+        save_percentage = (stat['shots_faced'] - stat['goals_allowed']) / stat['shots_faced'] if stat['shots_faced'] > 0 else 0.0
         goalie_stat = StatsModel(
             aggregation_id=aggregation_id,
             human_id=human_id,
             games_played=stat['games_played'],
             goals_allowed=stat['goals_allowed'],
-            goals_allowed_per_game=stat['goals_allowed_per_game'],
             shots_faced=stat['shots_faced'],
-            save_percentage=stat['save_percentage'],
+            goals_allowed_per_game=goals_allowed_per_game,
+            save_percentage=save_percentage,
             games_played_rank=stat['games_played_rank'],
             goals_allowed_rank=stat['goals_allowed_rank'],
-            goals_allowed_per_game_rank=stat['goals_allowed_per_game_rank'],
             shots_faced_rank=stat['shots_faced_rank'],
+            goals_allowed_per_game_rank=stat['goals_allowed_per_game_rank'],
             save_percentage_rank=stat['save_percentage_rank'],
             total_in_rank=total_in_rank,
             first_game_id=stat['first_game_id'],
@@ -142,23 +178,42 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
         # Commit in batches
         if i % batch_size == 0:
             session.commit()
-            print(f"\r{i}/{total_items} ({(i/total_items)*100:.2f}%)", end="")
     session.commit()
-    print(f"\r{total_items}/{total_items} (100.00%)")
-    print("\nDone.")
 
-# Example usage
 if __name__ == "__main__":
-    args = parse_args()
-    org_alias = args.org
     session = create_session("boss")
-    org_id = get_org_id_from_alias(session, org_alias)
-    division_ids = get_division_ids_for_last_season_in_all_leagues(session, org_id)
-    print(f"Aggregating goalie stats for {len(division_ids)} divisions in {org_alias}...")
-    for division_id in division_ids:
-        aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names)
-        aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, aggregation_window='Daily')
-        aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, aggregation_window='Weekly')
-    aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names)
-    aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, aggregation_window='Daily')
-    aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, aggregation_window='Weekly')
+    human_id_to_debug = None
+
+    # Get all org_id present in the Organization table
+    org_ids = session.query(Organization.id).all()
+    org_ids = [org_id[0] for org_id in org_ids]
+
+    for org_id in org_ids:
+        division_ids = get_all_division_ids_for_org(session, org_id)
+        print(f"Aggregating goalie stats for {len(division_ids)} divisions in org_id {org_id}...")
+        total_divisions = len(division_ids)
+        processed_divisions = 0
+        for division_id in division_ids:
+            aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+            aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+            processed_divisions += 1
+            if human_id_to_debug is None:
+                print(f"\rProcessed {processed_divisions}/{total_divisions} divisions ({(processed_divisions/total_divisions)*100:.2f}%)", end="")
+
+        aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+        aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+        aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+        
+        # Aggregate by level
+    level_ids = session.query(Division.level_id).distinct().all()
+    level_ids = [level_id[0] for level_id in level_ids]
+    total_levels = len(level_ids)
+    processed_levels = 0
+    for level_id in level_ids:
+        if level_id is None:
+            continue
+        if human_id_to_debug is None:
+            print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
+        processed_levels += 1
+        aggregate_goalie_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)

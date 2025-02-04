@@ -17,8 +17,20 @@ class BaseStatsHuman(db.Model):
     games_goalie = db.Column(db.Integer, default=0)
     games_goalie_rank = db.Column(db.Integer, default=0)
     total_in_rank = db.Column(db.Integer, default=0)
-    first_game_id = db.Column(db.Integer, db.ForeignKey('games.id'))
-    last_game_id = db.Column(db.Integer, db.ForeignKey('games.id'))
+    skaters_in_rank = db.Column(db.Integer, default=0)
+    goalies_in_rank = db.Column(db.Integer, default=0)
+    referees_in_rank = db.Column(db.Integer, default=0)
+    scorekeepers_in_rank = db.Column(db.Integer, default=0)
+    first_game_id = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    last_game_id = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    first_game_id_skater = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    last_game_id_skater = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    first_game_id_goalie = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    last_game_id_goalie = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    first_game_id_referee = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    last_game_id_referee = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    first_game_id_scorekeeper = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
+    last_game_id_scorekeeper = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=True)
 
     @declared_attr
     def __table_args__(cls):
@@ -196,6 +208,19 @@ class DivisionStatsHuman(BaseStatsHuman):
     def get_aggregation_column(cls):
         return 'division_id'
 
+class LevelStatsHuman(BaseStatsHuman):
+    __tablename__ = 'level_stats_human'
+    level_id = db.Column(db.Integer, db.ForeignKey('levels.id'), nullable=False)
+    aggregation_id = synonym('level_id')
+
+    @declared_attr
+    def aggregation_type(cls):
+        return 'level'
+
+    @classmethod
+    def get_aggregation_column(cls):
+        return 'level_id'
+
 class OrgStatsSkater(BaseStatsSkater):
     __tablename__ = 'org_stats_skater'
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
@@ -262,6 +287,19 @@ class DivisionStatsGoalie(BaseStatsGoalie):
     def get_aggregation_column(cls):
         return 'division_id'
 
+class LevelStatsGoalie(BaseStatsGoalie):
+    __tablename__ = 'level_stats_goalie'
+    level_id = db.Column(db.Integer, db.ForeignKey('levels.id'), nullable=False)
+    aggregation_id = synonym('level_id')
+
+    @declared_attr
+    def aggregation_type(cls):
+        return 'level'
+
+    @classmethod
+    def get_aggregation_column(cls):
+        return 'level_id'
+
 
 class OrgStatsReferee(BaseStatsReferee):
     __tablename__ = 'org_stats_referee'
@@ -288,6 +326,19 @@ class DivisionStatsReferee(BaseStatsReferee):
     @classmethod
     def get_aggregation_column(cls):
         return 'division_id'
+
+class LevelStatsReferee(BaseStatsReferee):
+    __tablename__ = 'level_stats_referee'
+    level_id = db.Column(db.Integer, db.ForeignKey('levels.id'), nullable=False)
+    aggregation_id = synonym('level_id')
+
+    @declared_attr
+    def aggregation_type(cls):
+        return 'level'
+
+    @classmethod
+    def get_aggregation_column(cls):
+        return 'level_id'
 
 
 class OrgStatsScorekeeper(BaseStatsScorekeeper):
