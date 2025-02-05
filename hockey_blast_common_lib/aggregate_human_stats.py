@@ -12,7 +12,8 @@ from hockey_blast_common_lib.db_connection import create_session
 from sqlalchemy.sql import func, case
 from hockey_blast_common_lib.options import parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS, not_human_names
 from hockey_blast_common_lib.utils import get_fake_human_for_stats, get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
-from hockey_blast_common_lib.stats_utils import assign_ranks
+from hockey_blast_common_lib.utils import assign_ranks
+from hockey_blast_common_lib.utils import get_start_datetime
 
 def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_filter_out, human_id_filter=None, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
@@ -50,18 +51,11 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
 
     # Apply aggregation window filter
     if aggregation_window:
-        last_game_datetime = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, Game.status.like('Final%')).scalar()
-        if last_game_datetime:
-            last_game_datetime = datetime.strptime(last_game_datetime, '%Y-%m-%d %H:%M:%S')
-            if aggregation_window == 'Daily':
-                start_datetime = last_game_datetime - timedelta(days=1)
-            elif aggregation_window == 'Weekly':
-                start_datetime = last_game_datetime - timedelta(weeks=1)
-            else:
-                start_datetime = None
-            if start_datetime:
-                game_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP).between(start_datetime, last_game_datetime)
-                filter_condition = filter_condition & game_window_filter
+        last_game_datetime_str = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, Game.status.like('Final%')).scalar()
+        start_datetime = get_start_datetime(last_game_datetime_str, aggregation_window)
+        if start_datetime:
+            game_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP).between(start_datetime, last_game_datetime_str)
+            filter_condition = filter_condition & game_window_filter
 
     # Delete existing items from the stats table
     session.query(StatsModel).filter(StatsModel.aggregation_id == aggregation_id).delete()
@@ -415,30 +409,30 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
     session.add(overall_human_stat)
     session.commit()
 
-if __name__ == "__main__":
+def run_aggregate_human_stats():
     session = create_session("boss")
     human_id_to_debug = None
 
-    # Get all org_id present in the Organization table
-    # org_ids = session.query(Organization.id).all()
-    # org_ids = [org_id[0] for org_id in org_ids]
+    # Aggregate by Org and Division inside Org
+    org_ids = session.query(Organization.id).all()
+    org_ids = [org_id[0] for org_id in org_ids]
 
-    # for org_id in org_ids:
-    #     division_ids = get_all_division_ids_for_org(session, org_id)
-    #     print(f"Aggregating human stats for {len(division_ids)} divisions in org_id {org_id}...")
-    #     total_divisions = len(division_ids)
-    #     processed_divisions = 0
-    #     for division_id in division_ids:
-    #         aggregate_human_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
-    #         aggregate_human_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Weekly')
-    #         aggregate_human_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Daily')
-    #         processed_divisions += 1
-    #         if human_id_to_debug is None:
-    #             print(f"\rProcessed {processed_divisions}/{total_divisions} divisions ({(processed_divisions/total_divisions)*100:.2f}%)", end="")
-    #     print("")
-    #     aggregate_human_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
-    #     aggregate_human_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Weekly')
-    #     aggregate_human_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Daily')
+    for org_id in org_ids:
+        division_ids = get_all_division_ids_for_org(session, org_id)
+        print(f"Aggregating human stats for {len(division_ids)} divisions in org_id {org_id}...")
+        total_divisions = len(division_ids)
+        processed_divisions = 0
+        for division_id in division_ids:
+            aggregate_human_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
+            aggregate_human_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Weekly')
+            aggregate_human_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Daily')
+            processed_divisions += 1
+            if human_id_to_debug is None:
+                print(f"\rProcessed {processed_divisions}/{total_divisions} divisions ({(processed_divisions/total_divisions)*100:.2f}%)", end="")
+        print("")
+        aggregate_human_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
+        aggregate_human_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Weekly')
+        aggregate_human_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Daily')
         
         # Aggregate by level
     level_ids = session.query(Division.level_id).distinct().all()
@@ -452,3 +446,6 @@ if __name__ == "__main__":
             print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
         processed_levels += 1
         aggregate_human_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
+
+if __name__ == "__main__":
+    run_aggregate_human_stats()

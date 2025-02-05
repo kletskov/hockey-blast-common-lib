@@ -1,5 +1,6 @@
 import sys
 import os
+from datetime import datetime, timedelta
 
 # Add the package directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -11,9 +12,9 @@ from sqlalchemy.sql import func
 def get_org_id_from_alias(session, org_alias):
     # Predefined organizations
     predefined_organizations = [
-        {"id": 1, "organization_name": "Sharks Ice", "alias": "sharksice"},
-        {"id": 2, "organization_name": "TriValley Ice", "alias": "tvice"},
-        {"id": 3, "organization_name": "CAHA", "alias": "caha"}
+        {"id": 1, "organization_name": "Sharks Ice", "alias": "sharksice", "website": "https://www.sharksice.com"},
+        {"id": 2, "organization_name": "TriValley Ice", "alias": "tvice", "website": "https://www.trivalleyice.com"},
+        {"id": 3, "organization_name": "CAHA", "alias": "caha", "website": "https://www.caha.com"}
     ]
 
     # Check if the organization exists
@@ -25,7 +26,7 @@ def get_org_id_from_alias(session, org_alias):
         for org in predefined_organizations:
             existing_org = session.query(Organization).filter_by(id=org["id"]).first()
             if not existing_org:
-                new_org = Organization(id=org["id"], organization_name=org["organization_name"], alias=org["alias"])
+                new_org = Organization(id=org["id"], organization_name=org["organization_name"], alias=org["alias"], website=org["website"])
                 session.add(new_org)
         session.commit()
 
@@ -81,6 +82,21 @@ def get_fake_human_for_stats(session):
     session.commit()  # Commit to get the human.id
 
     return human.id
+
+def get_start_datetime(last_game_datetime_str, aggregation_window):
+    if last_game_datetime_str:
+        last_game_datetime = datetime.strptime(last_game_datetime_str, '%Y-%m-%d %H:%M:%S')
+        if aggregation_window == 'Daily':
+            # From 10AM till midnight, 14 hours to avoid last day games
+            return last_game_datetime - timedelta(hours=14)
+        elif aggregation_window == 'Weekly':
+            return last_game_datetime - timedelta(weeks=1)
+    return None
+
+def assign_ranks(stats_dict, field, reverse_rank=False):
+    sorted_stats = sorted(stats_dict.items(), key=lambda x: x[1][field], reverse=not reverse_rank)
+    for rank, (key, stat) in enumerate(sorted_stats, start=1):
+        stats_dict[key][f'{field}_rank'] = rank
 
 #TEST DB CONNECTION, PERMISSIONS...
 # from hockey_blast_common_lib.db_connection import create_session

@@ -224,6 +224,7 @@ class Organization(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alias = db.Column(db.String(100), unique=True)
     organization_name = db.Column(db.String(100), unique=True)
+    website = db.Column(db.String(100), nullable=True)  # New field for website
 
 class Penalty(db.Model):
     __tablename__ = 'penalties'

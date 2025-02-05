@@ -8,6 +8,8 @@ cd ..
 
 # Step 2: Upload the new library version to PyPI
 echo "Uploading the new library version to PyPI..."
+source .venv/bin/activate
 ./upload_to_pypi.sh
+deactivate
 
 echo "New library version creation process completed."

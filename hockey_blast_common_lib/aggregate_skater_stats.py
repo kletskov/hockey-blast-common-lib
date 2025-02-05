@@ -12,6 +12,7 @@ from hockey_blast_common_lib.db_connection import create_session
 from sqlalchemy.sql import func, case
 from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
 from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
+from hockey_blast_common_lib.utils import get_start_datetime
 from sqlalchemy import func, case, and_
 from collections import defaultdict
 
@@ -20,6 +21,9 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
 
     # Get the name of the aggregation, for debug purposes
     if aggregation_type == 'org':
+        aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+        print(f"Aggregating skater stats for {aggregation_name} with window {aggregation_window}...")
+
         aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
     elif aggregation_type == 'division':
         aggregation_name = session.query(Division).filter(Division.id == aggregation_id).first().level
@@ -59,18 +63,11 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
 
     # Apply aggregation window filter
     if aggregation_window:
-        last_game_datetime = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, Game.status.like('Final%')).scalar()
-        if last_game_datetime:
-            last_game_datetime = datetime.strptime(last_game_datetime, '%Y-%m-%d %H:%M:%S')
-            if aggregation_window == 'Daily':
-                start_datetime = last_game_datetime - timedelta(days=1)
-            elif aggregation_window == 'Weekly':
-                start_datetime = last_game_datetime - timedelta(weeks=1)
-            else:
-                start_datetime = None
-            if start_datetime:
-                game_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP).between(start_datetime, last_game_datetime)
-                filter_condition = filter_condition & game_window_filter
+        last_game_datetime_str = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, Game.status.like('Final%')).scalar()
+        start_datetime = get_start_datetime(last_game_datetime_str, aggregation_window)
+        if start_datetime:
+            game_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP).between(start_datetime, last_game_datetime_str)
+            filter_condition = filter_condition & game_window_filter
 
     # Delete existing items from the stats table
     session.query(StatsModel).filter(StatsModel.aggregation_id == aggregation_id).delete()
@@ -254,16 +251,11 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         # Commit in batches
         if i % batch_size == 0:
             session.commit()
-            if debug_human_id is None:
-                print(f"\r{i}/{total_items} ({(i/total_items)*100:.2f}%)", end="")
-            
     session.commit()
-    if debug_human_id is None:
-        print(f"\r{total_items}/{total_items} (100.00%)")
 
-if __name__ == "__main__":
+def run_aggregate_skater_stats():
     session = create_session("boss")
-    human_id_to_debug = 117076
+    human_id_to_debug = None
 
     # Get all org_id present in the Organization table
     org_ids = session.query(Organization.id).all()
@@ -298,3 +290,6 @@ if __name__ == "__main__":
             print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
         processed_levels += 1
         aggregate_skater_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+
+if __name__ == "__main__":
+    run_aggregate_skater_stats()
