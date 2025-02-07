@@ -48,11 +48,11 @@ def analyze_levels(org):
 
     session.close()
 
-def fill_seed_skills():
+def fill_seed_levels():
     session = create_session("boss")
 
     # List of Skill objects based on the provided comments
-    skills = [
+    levels = [
         Level(is_seed=True, org_id=1, skill_value=10.0, level_name='Adult Division 1', level_alternative_name='Senior A'),
         Level(is_seed=True, org_id=1, skill_value=20.0, level_name='Adult Division 2', level_alternative_name='Senior B'),
         Level(is_seed=True, org_id=1, skill_value=30.0, level_name='Adult Division 3A', level_alternative_name='Senior BB'),
@@ -71,26 +71,26 @@ def fill_seed_skills():
         Level(is_seed=True, org_id=1, skill_value=90.0, level_name='Adult Division 9', level_alternative_name='Senior EEEEE')
     ]
 
-    for skill in skills:
+    for skill in levels:
         session.add(skill)
         session.commit()
 
     print("Seed skills have been populated into the database.")
 
-def assign_fake_skill_to_divisions(session, fake_skill):
+def assign_fake_level_to_divisions(session, fake_level):
     # Assign the special fake Skill to every existing Division
     divisions = session.query(Division).all()
     for division in divisions:
-        division.skill_id = fake_skill.id
+        division.skill_id = fake_level.id
     session.commit()
     print("Assigned special fake Skill to all Division records.")
 
-def delete_all_skills():
+def delete_all_levels():
     session = create_session("boss")
-    fake_skill = get_fake_level(session)
-    assign_fake_skill_to_divisions(session, fake_skill)
+    fake_level = get_fake_level(session)
+    assign_fake_level_to_divisions(session, fake_level)
     # Delete all Skill records except the fake skill
-    session.query(Level).filter(Level.id != fake_skill.id).delete(synchronize_session=False)
+    session.query(Level).filter(Level.id != fake_level.id).delete(synchronize_session=False)
     session.commit()
     print("All Skill records except the fake skill have been deleted.")
 
@@ -123,7 +123,7 @@ def populate_league_ids():
     print("League IDs have been populated into the Season table.")
 
 #if __name__ == "__main__":
-    # delete_all_skills()
-    #fill_seed_skills()
+    # delete_all_levels()
+    #fill_seed_levels()
     #populate_season_ids()  # Call the function to populate season_ids
     #populate_league_ids()  # Call the new function to populate league_ids
