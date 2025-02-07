@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from hockey_blast_common_lib.models import Game, Division, Level, Season, League
 from hockey_blast_common_lib.db_connection import create_session
+from hockey_blast_common_lib.utils import get_fake_skill
 
 def analyze_levels(org):
     session = create_session(org)
@@ -75,22 +76,6 @@ def fill_seed_skills():
         session.commit()
 
     print("Seed skills have been populated into the database.")
-
-def get_fake_skill(session):
-    # Create a special fake Skill with org_id == -1 and skill_value == -1
-    fake_skill = session.query(Level).filter_by(org_id=1, level_name='Fake Skill').first()
-    if not fake_skill:
-        fake_skill = Level(
-            org_id=1,
-            skill_value=-1,
-            level_name='Fake Skill',
-            level_alternative_name='',
-            is_seed=False
-        )
-        session.add(fake_skill)
-        session.commit()
-        print("Created special fake Skill record.")
-    return fake_skill
 
 def assign_fake_skill_to_divisions(session, fake_skill):
     # Assign the special fake Skill to every existing Division

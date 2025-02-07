@@ -98,6 +98,22 @@ def assign_ranks(stats_dict, field, reverse_rank=False):
     for rank, (key, stat) in enumerate(sorted_stats, start=1):
         stats_dict[key][f'{field}_rank'] = rank
 
+def get_fake_skill(session):
+    # Create a special fake Skill with org_id == -1 and skill_value == -1
+    fake_skill = session.query(Level).filter_by(org_id=1, level_name='Fake Skill').first()
+    if not fake_skill:
+        fake_skill = Level(
+            org_id=1,
+            skill_value=-1,
+            level_name='Fake Skill',
+            level_alternative_name='',
+            is_seed=False
+        )
+        session.add(fake_skill)
+        session.commit()
+        print("Created special fake Skill record.")
+    return fake_skill
+
 #TEST DB CONNECTION, PERMISSIONS...
 # from hockey_blast_common_lib.db_connection import create_session
 # session = create_session("frontend")
