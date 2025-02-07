@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 # Add the package directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hockey_blast_common_lib.models import Organization, Human, Division
+from hockey_blast_common_lib.models import Organization, Human, Division, Level
 from sqlalchemy.sql import func
 
 
@@ -98,7 +98,7 @@ def assign_ranks(stats_dict, field, reverse_rank=False):
     for rank, (key, stat) in enumerate(sorted_stats, start=1):
         stats_dict[key][f'{field}_rank'] = rank
 
-def get_fake_skill(session):
+def get_fake_level(session):
     # Create a special fake Skill with org_id == -1 and skill_value == -1
     fake_skill = session.query(Level).filter_by(org_id=1, level_name='Fake Skill').first()
     if not fake_skill:

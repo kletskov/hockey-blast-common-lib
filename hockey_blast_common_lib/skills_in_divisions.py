@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from hockey_blast_common_lib.models import Game, Division, Level, Season, League
 from hockey_blast_common_lib.db_connection import create_session
-from hockey_blast_common_lib.utils import get_fake_skill
+from hockey_blast_common_lib.utils import get_fake_level
 
 def analyze_levels(org):
     session = create_session(org)
@@ -87,7 +87,7 @@ def assign_fake_skill_to_divisions(session, fake_skill):
 
 def delete_all_skills():
     session = create_session("boss")
-    fake_skill = get_fake_skill(session)
+    fake_skill = get_fake_level(session)
     assign_fake_skill_to_divisions(session, fake_skill)
     # Delete all Skill records except the fake skill
     session.query(Level).filter(Level.id != fake_skill.id).delete(synchronize_session=False)
