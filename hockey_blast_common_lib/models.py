@@ -343,7 +343,13 @@ class TeamInTTS(db.Model):
         db.UniqueConstraint('org_id', 'team_id', 'tts_team_id', name='_org_team_tts_uc'),
     )
 
-
+class RequestLog(db.Model):
+    __tablename__ = 'request_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    user_agent = db.Column(db.String, nullable=False)
+    client_ip = db.Column(db.String, nullable=False)
+    path = db.Column(db.String, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False)
 
 # # MANUAL AMENDS HAPPEN HERE :)
 # from db_connection import create_session
