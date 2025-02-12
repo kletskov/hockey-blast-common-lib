@@ -350,6 +350,7 @@ class RequestLog(db.Model):
     client_ip = db.Column(db.String, nullable=False)
     path = db.Column(db.String, nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False)
+    cgi_params = db.Column(db.String, nullable=True)
 
 # # MANUAL AMENDS HAPPEN HERE :)
 # from db_connection import create_session
