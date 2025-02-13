@@ -14,13 +14,19 @@ from hockey_blast_common_lib.options import parse_args, MIN_GAMES_FOR_ORG_STATS,
 from hockey_blast_common_lib.utils import get_fake_human_for_stats, get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
 from hockey_blast_common_lib.utils import assign_ranks
 from hockey_blast_common_lib.utils import get_start_datetime
+from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 
 def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_filter_out, human_id_filter=None, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
 
     if aggregation_type == 'org':
-        aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
-        print(f"Aggregating goalie stats for {aggregation_name} with window {aggregation_window}...")
+        if aggregation_id == ALL_ORGS_ID:
+            aggregation_name = "All Orgs"
+            filter_condition = sqlalchemy.true()  # No filter for organization
+        else:
+            aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+            filter_condition = Game.org_id == aggregation_id
+        print(f"Aggregating human stats for {aggregation_name} with window {aggregation_window}...")
         if aggregation_window == 'Daily':
             StatsModel = OrgStatsDailyHuman
         elif aggregation_window == 'Weekly':
@@ -28,7 +34,6 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
         else:
             StatsModel = OrgStatsHuman
         min_games = MIN_GAMES_FOR_ORG_STATS
-        filter_condition = Game.org_id == aggregation_id
     elif aggregation_type == 'division':
         if aggregation_window == 'Daily':
             StatsModel = DivisionStatsDailyHuman
@@ -417,7 +422,7 @@ def run_aggregate_human_stats():
     org_ids = session.query(Organization.id).all()
     org_ids = [org_id[0] for org_id in org_ids]
 
-    for org_id in org_ids:
+    for org_id in [-1]:#org_ids:
         division_ids = get_all_division_ids_for_org(session, org_id)
         print(f"Aggregating human stats for {len(division_ids)} divisions in org_id {org_id}...")
         total_divisions = len(division_ids)
@@ -435,17 +440,17 @@ def run_aggregate_human_stats():
         aggregate_human_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Daily')
         
         # Aggregate by level
-    level_ids = session.query(Division.level_id).distinct().all()
-    level_ids = [level_id[0] for level_id in level_ids]
-    total_levels = len(level_ids)
-    processed_levels = 0
-    for level_id in level_ids:
-        if level_id is None:
-            continue
-        if human_id_to_debug is None:
-            print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
-        processed_levels += 1
-        aggregate_human_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
+    # level_ids = session.query(Division.level_id).distinct().all()
+    # level_ids = [level_id[0] for level_id in level_ids]
+    # total_levels = len(level_ids)
+    # processed_levels = 0
+    # for level_id in level_ids:
+    #     if level_id is None:
+    #         continue
+    #     if human_id_to_debug is None:
+    #         print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
+    #     processed_levels += 1
+    #     aggregate_human_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
 
 if __name__ == "__main__":
     run_aggregate_human_stats()

@@ -15,22 +15,20 @@ from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_b
 from hockey_blast_common_lib.utils import assign_ranks
 from sqlalchemy import func, case, and_
 from collections import defaultdict
+from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 
 def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_filter_out, debug_human_id=None, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
 
     # Get the name of the aggregation, for debug purposes
     if aggregation_type == 'org':
-        aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+        if aggregation_id == ALL_ORGS_ID:
+            aggregation_name = "All Orgs"
+            filter_condition = sqlalchemy.true()  # No filter for organization
+        else:
+            aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+            filter_condition = Game.org_id == aggregation_id
         print(f"Aggregating goalie stats for {aggregation_name} with window {aggregation_window}...")
-    elif aggregation_type == 'division':
-        aggregation_name = session.query(Division).filter(Division.id == aggregation_id).first().level
-    elif aggregation_type == 'level':
-        aggregation_name = session.query(Level).filter(Level.id == aggregation_id).first().level_name
-    else:
-        aggregation_name = "Unknown"
-
-    if aggregation_type == 'org':
         if aggregation_window == 'Daily':
             StatsModel = OrgStatsDailyGoalie
         elif aggregation_window == 'Weekly':
@@ -38,7 +36,6 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
         else:
             StatsModel = OrgStatsGoalie
         min_games = MIN_GAMES_FOR_ORG_STATS
-        filter_condition = Game.org_id == aggregation_id
     elif aggregation_type == 'division':
         if aggregation_window == 'Daily':
             StatsModel = DivisionStatsDailyGoalie

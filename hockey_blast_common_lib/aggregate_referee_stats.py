@@ -14,12 +14,18 @@ from hockey_blast_common_lib.options import parse_args, MIN_GAMES_FOR_ORG_STATS,
 from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
 from hockey_blast_common_lib.utils import assign_ranks
 from hockey_blast_common_lib.utils import get_start_datetime
+from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 
 def aggregate_referee_stats(session, aggregation_type, aggregation_id, names_to_filter_out, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
 
     if aggregation_type == 'org':
-        aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+        if aggregation_id == ALL_ORGS_ID:
+            aggregation_name = "All Orgs"
+            filter_condition = sqlalchemy.true()  # No filter for organization
+        else:
+            aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+            filter_condition = Game.org_id == aggregation_id
         print(f"Aggregating referee stats for {aggregation_name} with window {aggregation_window}...")
         if aggregation_window == 'Daily':
             StatsModel = OrgStatsDailyReferee
@@ -28,7 +34,6 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, names_to_
         else:
             StatsModel = OrgStatsReferee
         min_games = MIN_GAMES_FOR_ORG_STATS
-        filter_condition = Game.org_id == aggregation_id
     elif aggregation_type == 'division':
         if aggregation_window == 'Daily':
             StatsModel = DivisionStatsDailyReferee

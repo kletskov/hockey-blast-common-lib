@@ -15,16 +15,21 @@ from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_b
 from hockey_blast_common_lib.utils import get_start_datetime
 from sqlalchemy import func, case, and_
 from collections import defaultdict
+from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 
 def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_filter_out, debug_human_id=None, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
 
     # Get the name of the aggregation, for debug purposes
     if aggregation_type == 'org':
-        aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+        if aggregation_id == ALL_ORGS_ID:
+            aggregation_name = "All Orgs"
+            filter_condition = sqlalchemy.true()  # No filter for organization
+        else:
+            aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
+            filter_condition = Game.org_id == aggregation_id
         print(f"Aggregating skater stats for {aggregation_name} with window {aggregation_window}...")
 
-        aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
     elif aggregation_type == 'division':
         aggregation_name = session.query(Division).filter(Division.id == aggregation_id).first().level
     elif aggregation_type == 'level':
@@ -40,7 +45,6 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         else:
             StatsModel = OrgStatsSkater
         min_games = MIN_GAMES_FOR_ORG_STATS
-        filter_condition = Game.org_id == aggregation_id
     elif aggregation_type == 'division':
         if aggregation_window == 'Daily':
             StatsModel = DivisionStatsDailySkater
@@ -278,7 +282,7 @@ def run_aggregate_skater_stats():
         aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
         aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
         
-        # Aggregate by level
+    # Aggregate by level
     level_ids = session.query(Division.level_id).distinct().all()
     level_ids = [level_id[0] for level_id in level_ids]
     total_levels = len(level_ids)
