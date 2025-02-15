@@ -113,25 +113,29 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
         if stat.human_id in human_ids_to_filter:
             continue
         key = (aggregation_id, stat.human_id)
-        stats_dict[key] = {
-            'games_total': stat.games_skater,
-            'games_skater': stat.games_skater,
-            'games_goalie': 0,
-            'games_referee': 0,
-            'games_scorekeeper': 0,
-            'skater_game_ids': stat.skater_game_ids,
-            'goalie_game_ids': [],
-            'referee_game_ids': [],
-            'scorekeeper_game_ids': [],
-            'first_game_id_skater': None,
-            'last_game_id_skater': None,
-            'first_game_id_goalie': None,
-            'last_game_id_goalie': None,
-            'first_game_id_referee': None,
-            'last_game_id_referee': None,
-            'first_game_id_scorekeeper': None,
-            'last_game_id_scorekeeper': None
-        }
+        if key not in stats_dict:
+            stats_dict[key] = {
+                'games_total': 0,
+                'games_skater': 0,
+                'games_goalie': 0,
+                'games_referee': 0,
+                'games_scorekeeper': 0,
+                'skater_game_ids': [],
+                'goalie_game_ids': [],
+                'referee_game_ids': [],
+                'scorekeeper_game_ids': [],
+                'first_game_id_skater': None,
+                'last_game_id_skater': None,
+                'first_game_id_goalie': None,
+                'last_game_id_goalie': None,
+                'first_game_id_referee': None,
+                'last_game_id_referee': None,
+                'first_game_id_scorekeeper': None,
+                'last_game_id_scorekeeper': None
+            }
+        stats_dict[key]['games_total'] += stat.games_skater
+        stats_dict[key]['games_skater'] += stat.games_skater
+        stats_dict[key]['skater_game_ids'].extend(stat.skater_game_ids)
 
     for stat in goalie_stats:
         if stat.human_id in human_ids_to_filter:
@@ -139,13 +143,13 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_total': stat.games_goalie,
+                'games_total': 0,
                 'games_skater': 0,
-                'games_goalie': stat.games_goalie,
+                'games_goalie': 0,
                 'games_referee': 0,
                 'games_scorekeeper': 0,
                 'skater_game_ids': [],
-                'goalie_game_ids': stat.goalie_game_ids,
+                'goalie_game_ids': [],
                 'referee_game_ids': [],
                 'scorekeeper_game_ids': [],
                 'first_game_id_skater': None,
@@ -157,10 +161,9 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
                 'first_game_id_scorekeeper': None,
                 'last_game_id_scorekeeper': None
             }
-        else:
-            stats_dict[key]['games_goalie'] += stat.games_goalie
-            stats_dict[key]['games_total'] += stat.games_goalie
-            stats_dict[key]['goalie_game_ids'] += stat.goalie_game_ids
+        stats_dict[key]['games_total'] += stat.games_goalie
+        stats_dict[key]['games_goalie'] += stat.games_goalie
+        stats_dict[key]['goalie_game_ids'].extend(stat.goalie_game_ids)
 
     for stat in referee_stats:
         if stat.human_id in human_ids_to_filter:
@@ -168,14 +171,14 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_total': stat.games_referee,
+                'games_total': 0,
                 'games_skater': 0,
                 'games_goalie': 0,
-                'games_referee': stat.games_referee,
+                'games_referee': 0,
                 'games_scorekeeper': 0,
                 'skater_game_ids': [],
                 'goalie_game_ids': [],
-                'referee_game_ids': stat.referee_game_ids,
+                'referee_game_ids': [],
                 'scorekeeper_game_ids': [],
                 'first_game_id_skater': None,
                 'last_game_id_skater': None,
@@ -186,10 +189,9 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
                 'first_game_id_scorekeeper': None,
                 'last_game_id_scorekeeper': None
             }
-        else:
-            stats_dict[key]['games_referee'] += stat.games_referee
-            stats_dict[key]['games_total'] += stat.games_referee
-            stats_dict[key]['referee_game_ids'] += stat.referee_game_ids
+        stats_dict[key]['games_total'] += stat.games_referee
+        stats_dict[key]['games_referee'] += stat.games_referee
+        stats_dict[key]['referee_game_ids'].extend(stat.referee_game_ids)
 
     for stat in referee_stats_2:
         if stat.human_id in human_ids_to_filter:
@@ -197,14 +199,14 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_total': stat.games_referee,
+                'games_total': 0,
                 'games_skater': 0,
                 'games_goalie': 0,
-                'games_referee': stat.games_referee,
+                'games_referee': 0,
                 'games_scorekeeper': 0,
                 'skater_game_ids': [],
                 'goalie_game_ids': [],
-                'referee_game_ids': stat.referee_game_ids,
+                'referee_game_ids': [],
                 'scorekeeper_game_ids': [],
                 'first_game_id_skater': None,
                 'last_game_id_skater': None,
@@ -215,10 +217,9 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
                 'first_game_id_scorekeeper': None,
                 'last_game_id_scorekeeper': None
             }
-        else:
-            stats_dict[key]['games_referee'] += stat.games_referee
-            stats_dict[key]['games_total'] += stat.games_referee
-            stats_dict[key]['referee_game_ids'] += stat.referee_game_ids
+        stats_dict[key]['games_total'] += stat.games_referee
+        stats_dict[key]['games_referee'] += stat.games_referee
+        stats_dict[key]['referee_game_ids'].extend(stat.referee_game_ids)
 
     for stat in scorekeeper_stats:
         if stat.human_id in human_ids_to_filter:
@@ -226,15 +227,15 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_total': stat.games_scorekeeper,
+                'games_total': 0,
                 'games_skater': 0,
                 'games_goalie': 0,
                 'games_referee': 0,
-                'games_scorekeeper': stat.games_scorekeeper,
+                'games_scorekeeper': 0,
                 'skater_game_ids': [],
                 'goalie_game_ids': [],
                 'referee_game_ids': [],
-                'scorekeeper_game_ids': stat.scorekeeper_game_ids,
+                'scorekeeper_game_ids': [],
                 'first_game_id_skater': None,
                 'last_game_id_skater': None,
                 'first_game_id_goalie': None,
@@ -244,10 +245,9 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
                 'first_game_id_scorekeeper': None,
                 'last_game_id_scorekeeper': None
             }
-        else:
-            stats_dict[key]['games_scorekeeper'] += stat.games_scorekeeper
-            stats_dict[key]['games_total'] += stat.games_scorekeeper
-            stats_dict[key]['scorekeeper_game_ids'] += stat.scorekeeper_game_ids
+        stats_dict[key]['games_total'] += stat.games_scorekeeper
+        stats_dict[key]['games_scorekeeper'] += stat.games_scorekeeper
+        stats_dict[key]['scorekeeper_game_ids'].extend(stat.scorekeeper_game_ids)
 
     # Ensure all keys have valid human_id values
     stats_dict = {key: value for key, value in stats_dict.items() if key[1] is not None}

@@ -88,18 +88,24 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
         if stat.human_id in human_ids_to_filter:
             continue
         key = (aggregation_id, stat.human_id)
-        if stat.games_played < min_games:
-            continue
-        stats_dict[key] = {
-            'games_played': stat.games_played,
-            'goals_allowed': stat.goals_allowed if stat.goals_allowed is not None else 0,
-            'shots_faced': stat.shots_faced if stat.shots_faced is not None else 0,
-            'goals_allowed_per_game': 0.0,
-            'save_percentage': 0.0,
-            'game_ids': stat.game_ids,
-            'first_game_id': None,
-            'last_game_id': None
-        }
+        if key not in stats_dict:
+            stats_dict[key] = {
+                'games_played': 0,
+                'goals_allowed': 0,
+                'shots_faced': 0,
+                'goals_allowed_per_game': 0.0,
+                'save_percentage': 0.0,
+                'game_ids': [],
+                'first_game_id': None,
+                'last_game_id': None
+            }
+        stats_dict[key]['games_played'] += stat.games_played
+        stats_dict[key]['goals_allowed'] += stat.goals_allowed if stat.goals_allowed is not None else 0
+        stats_dict[key]['shots_faced'] += stat.shots_faced if stat.shots_faced is not None else 0
+        stats_dict[key]['game_ids'].extend(stat.game_ids)
+
+    # Filter out entries with games_played less than min_games
+    stats_dict = {key: value for key, value in stats_dict.items() if value['games_played'] >= min_games}
 
     # Calculate per game stats
     for key, stat in stats_dict.items():

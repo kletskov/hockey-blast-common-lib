@@ -84,42 +84,38 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
 
     # Aggregate games played for each human in each division, excluding goalies
     games_played_stats = session.query(
-        Game.org_id,
         GameRoster.human_id,
         func.count(Game.id).label('games_played'),
         func.array_agg(Game.id).label('game_ids')
-    ).join(GameRoster, Game.id == GameRoster.game_id).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, GameRoster.human_id).all()
+    ).join(Game, Game.id == GameRoster.game_id).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(GameRoster.human_id).all()
 
     # Aggregate goals for each human in each division, excluding goalies
     goals_stats = session.query(
-        Game.org_id,
         Goal.goal_scorer_id.label('human_id'),
         func.count(Goal.id).label('goals'),
         func.array_agg(Goal.game_id).label('goal_game_ids')
-    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.goal_scorer_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.goal_scorer_id).all()
+    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.goal_scorer_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Goal.goal_scorer_id).all()
 
     # Aggregate assists for each human in each division, excluding goalies
     assists_stats = session.query(
-        Game.org_id,
         Goal.assist_1_id.label('human_id'),
         func.count(Goal.id).label('assists'),
         func.array_agg(Goal.game_id).label('assist_game_ids')
-    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.assist_1_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.assist_1_id).all()
+    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.assist_1_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Goal.assist_1_id).all()
 
     assists_stats_2 = session.query(
-        Game.org_id,
         Goal.assist_2_id.label('human_id'),
         func.count(Goal.id).label('assists'),
         func.array_agg(Goal.game_id).label('assist_2_game_ids')
-    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.assist_2_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Goal.assist_2_id).all()
+    ).join(Game, Game.id == Goal.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Goal.assist_2_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Goal.assist_2_id).all()
 
     # Aggregate penalties for each human in each division, excluding goalies
     penalties_stats = session.query(
-        Game.org_id,
         Penalty.penalized_player_id.label('human_id'),
         func.count(Penalty.id).label('penalties'),
+        func.sum(case((Penalty.penalty_minutes == 'GM', 1), else_=0)).label('gm_penalties'),  # New aggregation for GM penalties
         func.array_agg(Penalty.game_id).label('penalty_game_ids')
-    ).join(Game, Game.id == Penalty.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Penalty.penalized_player_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Game.org_id, Penalty.penalized_player_id).all()
+    ).join(Game, Game.id == Penalty.game_id).join(GameRoster, and_(Game.id == GameRoster.game_id, Penalty.penalized_player_id == GameRoster.human_id)).join(Division, Game.division_id == Division.id).filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(Penalty.penalized_player_id).all()
 
     # Combine the results
     stats_dict = {}
@@ -127,22 +123,27 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         if stat.human_id in human_ids_to_filter:
             continue
         key = (aggregation_id, stat.human_id)
-        if stat.games_played < min_games:
-            continue
-        stats_dict[key] = {
-            'games_played': stat.games_played,
-            'goals': 0,
-            'assists': 0,
-            'penalties': 0,
-            'points': 0,  # Initialize points
-            'goals_per_game': 0.0,
-            'points_per_game': 0.0,
-            'assists_per_game': 0.0,
-            'penalties_per_game': 0.0,
-            'game_ids': stat.game_ids,
-            'first_game_id': None,
-            'last_game_id': None
-        }
+        if key not in stats_dict:
+            stats_dict[key] = {
+                'games_played': 0,
+                'goals': 0,
+                'assists': 0,
+                'penalties': 0,
+                'gm_penalties': 0,  # Initialize GM penalties
+                'points': 0,  # Initialize points
+                'goals_per_game': 0.0,
+                'points_per_game': 0.0,
+                'assists_per_game': 0.0,
+                'penalties_per_game': 0.0,
+                'game_ids': [],
+                'first_game_id': None,
+                'last_game_id': None
+            }
+        stats_dict[key]['games_played'] += stat.games_played
+        stats_dict[key]['game_ids'].extend(stat.game_ids)
+
+    # Filter out entries with games_played less than min_games
+    stats_dict = {key: value for key, value in stats_dict.items() if value['games_played'] >= min_games}
 
     for stat in goals_stats:
         key = (aggregation_id, stat.human_id)
@@ -166,6 +167,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         key = (aggregation_id, stat.human_id)
         if key in stats_dict:
             stats_dict[key]['penalties'] += stat.penalties
+            stats_dict[key]['gm_penalties'] += stat.gm_penalties  # Update GM penalties
 
     # Calculate per game stats
     for key, stat in stats_dict.items():
@@ -201,6 +203,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
     assign_ranks(stats_dict, 'assists')
     assign_ranks(stats_dict, 'points')
     assign_ranks(stats_dict, 'penalties')
+    assign_ranks(stats_dict, 'gm_penalties')  # Assign ranks for GM penalties
     assign_ranks(stats_dict, 'goals_per_game')
     assign_ranks(stats_dict, 'points_per_game')
     assign_ranks(stats_dict, 'assists_per_game')
@@ -234,6 +237,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
             assists=stat['assists'],
             points=stat['goals'] + stat['assists'],
             penalties=stat['penalties'],
+            gm_penalties=stat['gm_penalties'],  # Include GM penalties
             goals_per_game=goals_per_game,
             points_per_game=points_per_game,
             assists_per_game=assists_per_game,
@@ -243,6 +247,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
             assists_rank=stat['assists_rank'],
             points_rank=stat['points_rank'],
             penalties_rank=stat['penalties_rank'],
+            gm_penalties_rank=stat['gm_penalties_rank'],  # Include GM penalties rank
             goals_per_game_rank=stat['goals_per_game_rank'],
             points_per_game_rank=stat['points_per_game_rank'],
             assists_per_game_rank=stat['assists_per_game_rank'],

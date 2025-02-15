@@ -62,6 +62,8 @@ class BaseStatsSkater(db.Model):
     points_rank = db.Column(db.Integer, default=0)
     penalties = db.Column(db.Integer, default=0)
     penalties_rank = db.Column(db.Integer, default=0)
+    gm_penalties = db.Column(db.Integer, default=0)  # New field for GM penalties
+    gm_penalties_rank = db.Column(db.Integer, default=0)  # New field for GM penalties rank
     goals_per_game = db.Column(db.Float, default=0.0)
     goals_per_game_rank = db.Column(db.Integer, default=0)
     points_per_game = db.Column(db.Float, default=0.0)

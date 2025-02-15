@@ -94,16 +94,19 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, names_to_
         if stat.human_id in human_ids_to_filter:
             continue
         key = (aggregation_id, stat.human_id)
-        stats_dict[key] = {
-            'games_reffed': stat.games_reffed,
-            'penalties_given': 0,
-            'gm_given': 0,
-            'penalties_per_game': 0.0,
-            'gm_per_game': 0.0,
-            'game_ids': stat.game_ids,
-            'first_game_id': None,
-            'last_game_id': None
-        }
+        if key not in stats_dict:
+            stats_dict[key] = {
+                'games_reffed': 0,
+                'penalties_given': 0,
+                'gm_given': 0,
+                'penalties_per_game': 0.0,
+                'gm_per_game': 0.0,
+                'game_ids': [],
+                'first_game_id': None,
+                'last_game_id': None
+            }
+        stats_dict[key]['games_reffed'] += stat.games_reffed
+        stats_dict[key]['game_ids'].extend(stat.game_ids)
 
     for stat in games_reffed_stats_2:
         if stat.human_id in human_ids_to_filter:
@@ -111,18 +114,20 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, names_to_
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_reffed': stat.games_reffed,
+                'games_reffed': 0,
                 'penalties_given': 0,
                 'gm_given': 0,
                 'penalties_per_game': 0.0,
                 'gm_per_game': 0.0,
-                'game_ids': stat.game_ids,
+                'game_ids': [],
                 'first_game_id': None,
                 'last_game_id': None
             }
-        else:
-            stats_dict[key]['games_reffed'] += stat.games_reffed
-            stats_dict[key]['game_ids'].extend(stat.game_ids)
+        stats_dict[key]['games_reffed'] += stat.games_reffed
+        stats_dict[key]['game_ids'].extend(stat.game_ids)
+
+    # Filter out entries with games_reffed less than min_games
+    stats_dict = {key: value for key, value in stats_dict.items() if value['games_reffed'] >= min_games}
 
     for stat in penalties_given_stats:
         if stat.referee_1_id and stat.referee_1_id not in human_ids_to_filter:
@@ -147,9 +152,6 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, names_to_
 
     # Ensure all keys have valid human_id values
     stats_dict = {key: value for key, value in stats_dict.items() if key[1] is not None}
-
-    # Filter out referees with less than min_games
-    stats_dict = {key: value for key, value in stats_dict.items() if value['games_reffed'] >= min_games}
 
     # Populate first_game_id and last_game_id
     for key, stat in stats_dict.items():
