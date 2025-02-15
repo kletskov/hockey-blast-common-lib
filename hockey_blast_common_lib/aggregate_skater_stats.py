@@ -135,6 +135,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
                 'points_per_game': 0.0,
                 'assists_per_game': 0.0,
                 'penalties_per_game': 0.0,
+                'gm_penalties_per_game': 0.0,  # Initialize GM penalties per game
                 'game_ids': [],
                 'first_game_id': None,
                 'last_game_id': None
@@ -176,6 +177,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
             stat['points_per_game'] = stat['points'] / stat['games_played']
             stat['assists_per_game'] = stat['assists'] / stat['games_played']
             stat['penalties_per_game'] = stat['penalties'] / stat['games_played']
+            stat['gm_penalties_per_game'] = stat['gm_penalties'] / stat['games_played']  # Calculate GM penalties per game
 
     # Ensure all keys have valid human_id values
     stats_dict = {key: value for key, value in stats_dict.items() if key[1] is not None}
@@ -208,6 +210,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
     assign_ranks(stats_dict, 'points_per_game')
     assign_ranks(stats_dict, 'assists_per_game')
     assign_ranks(stats_dict, 'penalties_per_game')
+    assign_ranks(stats_dict, 'gm_penalties_per_game')  # Assign ranks for GM penalties per game
 
     # Debug output for specific human
     if debug_human_id:
@@ -229,6 +232,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
         points_per_game = (stat['goals'] + stat['assists']) / stat['games_played'] if stat['games_played'] > 0 else 0.0
         assists_per_game = stat['assists'] / stat['games_played'] if stat['games_played'] > 0 else 0.0
         penalties_per_game = stat['penalties'] / stat['games_played'] if stat['games_played'] > 0 else 0.0
+        gm_penalties_per_game = stat['gm_penalties'] / stat['games_played'] if stat['games_played'] > 0 else 0.0  # Calculate GM penalties per game
         skater_stat = StatsModel(
             aggregation_id=aggregation_id,
             human_id=human_id,
@@ -242,6 +246,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
             points_per_game=points_per_game,
             assists_per_game=assists_per_game,
             penalties_per_game=penalties_per_game,
+            gm_penalties_per_game=gm_penalties_per_game,  # Include GM penalties per game
             games_played_rank=stat['games_played_rank'],
             goals_rank=stat['goals_rank'],
             assists_rank=stat['assists_rank'],
@@ -252,6 +257,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_f
             points_per_game_rank=stat['points_per_game_rank'],
             assists_per_game_rank=stat['assists_per_game_rank'],
             penalties_per_game_rank=stat['penalties_per_game_rank'],
+            gm_penalties_per_game_rank=stat['gm_penalties_per_game_rank'],  # Include GM penalties per game rank
             total_in_rank=total_in_rank,
             first_game_id=stat['first_game_id'],
             last_game_id=stat['last_game_id']

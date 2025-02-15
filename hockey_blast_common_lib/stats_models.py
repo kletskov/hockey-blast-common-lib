@@ -72,6 +72,8 @@ class BaseStatsSkater(db.Model):
     assists_per_game_rank = db.Column(db.Integer, default=0)
     penalties_per_game = db.Column(db.Float, default=0.0)
     penalties_per_game_rank = db.Column(db.Integer, default=0)
+    gm_penalties_per_game = db.Column(db.Float, default=0.0)
+    gm_penalties_per_game_rank = db.Column(db.Integer, default=0)
     total_in_rank = db.Column(db.Integer, default=0)
     first_game_id = db.Column(db.Integer, db.ForeignKey('games.id'))
     last_game_id = db.Column(db.Integer, db.ForeignKey('games.id'))
@@ -84,6 +86,7 @@ class BaseStatsSkater(db.Model):
             db.Index(f'idx_{cls.aggregation_type}_points_per_game3', cls.get_aggregation_column(), 'points_per_game'),
             db.Index(f'idx_{cls.aggregation_type}_assists_per_game3', cls.get_aggregation_column(), 'assists_per_game'),
             db.Index(f'idx_{cls.aggregation_type}_penalties_per_game3', cls.get_aggregation_column(), 'penalties_per_game'),
+            db.Index(f'idx_{cls.aggregation_type}_gm_penalties_per_game3', cls.get_aggregation_column(), 'gm_penalties_per_game'),
             db.Index(f'idx_{cls.aggregation_type}_games_played3', cls.get_aggregation_column(), 'games_played')
         )
 
