@@ -4,7 +4,7 @@ MAX_HUMAN_SEARCH_RESULTS = 25
 MAX_TEAM_SEARCH_RESULTS = 25
 MIN_GAMES_FOR_ORG_STATS = 1
 MIN_GAMES_FOR_DIVISION_STATS = 1
-MIN_GAMES_FOR_LEVEL_STATS = 20
+MIN_GAMES_FOR_LEVEL_STATS = 1
 
 orgs = {'caha', 'sharksice', 'tvice'}
 
@@ -12,7 +12,8 @@ not_human_names = [
     ("Away", None, None),
     (None, "Unknown", None),
     ("Not", None , None),
-    (None , None, "Goalie")
+    (None , None, "Goalie"),
+    ("Unassigned",None , None)
 ]
 
 def parse_args():
