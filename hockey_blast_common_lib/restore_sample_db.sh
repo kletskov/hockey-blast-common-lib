@@ -15,9 +15,16 @@ SUPERUSER_PASSWORD="your_superuser_password"
 # Export PGPASSWORD to avoid password prompt
 export PGPASSWORD=$SUPERUSER_PASSWORD
 
-# Drop the existing database if it exists
-psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --command="SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '$DB_NAME' AND pid <> pg_backend_pid();"
-psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --command="DROP DATABASE IF EXISTS $DB_NAME"
+# Generate a unique timestamp
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+BACKUP_DB_NAME="${DB_NAME}_backup_${TIMESTAMP}"
+
+# Check if the database exists and rename it if it does
+DB_EXISTS=$(psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --tuples-only --command="SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'")
+if [ "$DB_EXISTS" = "1" ]; then
+  psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --command="SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '$DB_NAME' AND pid <> pg_backend_pid();"
+  psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --command="ALTER DATABASE $DB_NAME RENAME TO $BACKUP_DB_NAME"
+fi
 
 # Create a new database
 psql --username=$SUPERUSER --host=$DB_HOST --port=$DB_PORT -d postgres --command="CREATE DATABASE $DB_NAME OWNER $SUPERUSER"

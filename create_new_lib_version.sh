@@ -4,6 +4,10 @@
 echo "Changing directory to hockey_blast_common_lib and dumping the sample database..."
 cd hockey_blast_common_lib
 ./dump_sample_db.sh
+if [ $? -ne 0 ]; then
+  echo "Error: Failed to dump the sample database."
+  exit 1
+fi
 cd ..
 
 # Step 2: Upload the new library version to PyPI

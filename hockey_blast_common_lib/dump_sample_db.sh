@@ -14,6 +14,10 @@ export PGPASSWORD=$DB_PASSWORD
 
 # Dump the database schema and data
 pg_dump --username=$DB_USER --host=$DB_HOST --port=$DB_PORT --format=custom --file=$DUMP_FILE $DB_NAME
+if [ $? -ne 0 ]; then
+  echo "Error: Database dump failed."
+  exit 1
+fi
 
 # Compress the backup file
 gzip -c $DUMP_FILE > $COMPRESSED_DUMP_FILE
