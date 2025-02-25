@@ -440,17 +440,17 @@ def run_aggregate_human_stats():
         aggregate_human_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug, aggregation_window='Daily')
         
         # Aggregate by level
-    # level_ids = session.query(Division.level_id).distinct().all()
-    # level_ids = [level_id[0] for level_id in level_ids]
-    # total_levels = len(level_ids)
-    # processed_levels = 0
-    # for level_id in level_ids:
-    #     if level_id is None:
-    #         continue
-    #     if human_id_to_debug is None:
-    #         print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
-    #     processed_levels += 1
-    #     aggregate_human_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
+    level_ids = session.query(Division.level_id).distinct().all()
+    level_ids = [level_id[0] for level_id in level_ids]
+    total_levels = len(level_ids)
+    processed_levels = 0
+    for level_id in level_ids:
+        if level_id is None:
+            continue
+        if human_id_to_debug is None:
+            print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
+        processed_levels += 1
+        aggregate_human_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, human_id_filter=human_id_to_debug)
 
 if __name__ == "__main__":
     run_aggregate_human_stats()
