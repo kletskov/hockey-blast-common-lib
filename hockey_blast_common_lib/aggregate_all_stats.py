@@ -9,7 +9,7 @@ from hockey_blast_common_lib.aggregate_goalie_stats import run_aggregate_goalie_
 from hockey_blast_common_lib.aggregate_referee_stats import run_aggregate_referee_stats
 
 if __name__ == "__main__":
-    print("Running aggregate_human_stats...")
+    print("Running aggregate_human_stats...", flush=True)
     run_aggregate_human_stats()
     print("Finished running aggregate_human_stats\n")
 
