@@ -18,7 +18,7 @@ class Division(db.Model):
     league_number = db.Column(db.Integer) # TODO: Deprecate usage and remove (get this info through Season->League)
     season_number = db.Column(db.Integer) # TODO: Deprecate usage and remove (get this info from Season by season_id)
     season_id = db.Column(db.Integer, db.ForeignKey('seasons.id'))
-    level = db.Column(db.String(100)) # Obsolete, use skill_id instead
+    level = db.Column(db.String(100)) # Used to display original level name, however level_id may combine some levels with different name!
     level_id = db.Column(db.Integer, db.ForeignKey('levels.id')) # New field
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
     __table_args__ = (
