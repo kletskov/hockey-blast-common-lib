@@ -9,6 +9,7 @@ MIN_GAMES_FOR_LEVEL_STATS = 1
 orgs = {'caha', 'sharksice', 'tvice'}
 
 not_human_names = [
+    ("Home", None, None),
     ("Away", None, None),
     (None, "Unknown", None),
     ("Not", None , None),

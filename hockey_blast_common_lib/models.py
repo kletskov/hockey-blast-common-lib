@@ -159,7 +159,7 @@ class Level(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
     skill_value = db.Column(db.Float)  # A number from 0 (NHL) to 100 (pedestrian)
-    level_name = db.Column(db.String(100), unique=True)
+    level_name = db.Column(db.String(100))
     level_alternative_name = db.Column(db.String(100))
     is_seed = db.Column(db.Boolean, nullable=True, default=False)  # New field
     skill_propagation_sequence = db.Column(db.Integer, nullable=True, default=-1)
