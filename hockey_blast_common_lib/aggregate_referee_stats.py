@@ -48,11 +48,15 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, names_to_
         min_games = MIN_GAMES_FOR_LEVEL_STATS
         filter_condition = Division.level_id == aggregation_id
         # Add filter to only include games for the last 5 years
-        five_years_ago = datetime.now() - timedelta(days=5*365)
-        level_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP) >= five_years_ago
-        filter_condition = filter_condition & level_window_filter
+        # five_years_ago = datetime.now() - timedelta(days=5*365)
+        # level_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP) >= five_years_ago
+        # filter_condition = filter_condition & level_window_filter
     else:
         raise ValueError("Invalid aggregation type")
+
+    # Delete existing items from the stats table
+    session.query(StatsModel).filter(StatsModel.aggregation_id == aggregation_id).delete()
+    session.commit()
 
     # Apply aggregation window filter
     if aggregation_window:
@@ -61,11 +65,11 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, names_to_
         if start_datetime:
             game_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP).between(start_datetime, last_game_datetime_str)
             filter_condition = filter_condition & game_window_filter
+        else:
+            #print(f"Warning: No valid start datetime for aggregation window '{aggregation_window}' for {aggregation_name}. No games will be included.")
+            return
 
-    # Delete existing items from the stats table
-    session.query(StatsModel).filter(StatsModel.aggregation_id == aggregation_id).delete()
-    session.commit()
-
+    filter_condition = filter_condition & (Division.id == Game.division_id)
     # Aggregate games reffed for each referee
     games_reffed_stats = session.query(
         Game.referee_1_id.label('human_id'),

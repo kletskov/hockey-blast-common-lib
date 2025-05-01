@@ -14,7 +14,8 @@ def get_org_id_from_alias(session, org_alias):
     predefined_organizations = [
         {"id": 1, "organization_name": "Sharks Ice", "alias": "sharksice", "website": "https://www.sharksice.com"},
         {"id": 2, "organization_name": "TriValley Ice", "alias": "tvice", "website": "https://www.trivalleyice.com"},
-        {"id": 3, "organization_name": "CAHA", "alias": "caha", "website": "https://www.caha.com"}
+        {"id": 3, "organization_name": "CAHA", "alias": "caha", "website": "https://www.caha.com"},
+        {"id": 4, "organization_name": "Tacoma Twin Rinks", "alias": "ttr", "website": "https://psicesports.com"},
     ]
 
     # Check if the organization exists
@@ -84,13 +85,22 @@ def get_fake_human_for_stats(session):
     return human.id
 
 def get_start_datetime(last_game_datetime_str, aggregation_window):
+    if aggregation_window == 'Weekly':
+        if last_game_datetime_str:
+            last_game_datetime = datetime.strptime(last_game_datetime_str, '%Y-%m-%d %H:%M:%S')
+            # Check if the last game datetime is over 1 week from now
+            if datetime.now() - last_game_datetime > timedelta(weeks=1):
+                return None
+        # Use current time as the start of the weekly window
+        return datetime.now() - timedelta(weeks=1)
     if last_game_datetime_str:
         last_game_datetime = datetime.strptime(last_game_datetime_str, '%Y-%m-%d %H:%M:%S')
         if aggregation_window == 'Daily':
+            # Check if the last game datetime is over 24 hours from now
+            if datetime.now() - last_game_datetime > timedelta(hours=24):
+                return None
             # From 10AM till midnight, 14 hours to avoid last day games
             return last_game_datetime - timedelta(hours=14)
-        elif aggregation_window == 'Weekly':
-            return last_game_datetime - timedelta(weeks=1)
     return None
 
 def assign_ranks(stats_dict, field, reverse_rank=False):

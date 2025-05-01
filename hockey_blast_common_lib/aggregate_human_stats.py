@@ -54,6 +54,10 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
     else:
         raise ValueError("Invalid aggregation type")
 
+    # Delete existing items from the stats table
+    session.query(StatsModel).filter(StatsModel.aggregation_id == aggregation_id).delete()
+    session.commit()
+
     # Apply aggregation window filter
     if aggregation_window:
         last_game_datetime_str = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, Game.status.like('Final%')).scalar()
@@ -61,10 +65,9 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, names_to_fi
         if start_datetime:
             game_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP).between(start_datetime, last_game_datetime_str)
             filter_condition = filter_condition & game_window_filter
-
-    # Delete existing items from the stats table
-    session.query(StatsModel).filter(StatsModel.aggregation_id == aggregation_id).delete()
-    session.commit()
+        else:
+            #print(f"Warning: No valid start datetime for aggregation window '{aggregation_window}' for {aggregation_name}. No games will be included.")
+            return
 
     # Filter for specific human_id if provided
     human_filter = []
