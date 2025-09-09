@@ -351,6 +351,7 @@ class RequestLog(db.Model):
     path = db.Column(db.String, nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False)
     cgi_params = db.Column(db.String, nullable=True)
+    response_time_ms = db.Column(db.Float, nullable=True)  # Response time in milliseconds
 
 # # MANUAL AMENDS HAPPEN HERE :)
 # from db_connection import create_session

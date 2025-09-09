@@ -16,6 +16,7 @@ from hockey_blast_common_lib.utils import assign_ranks
 from sqlalchemy import func, case, and_
 from collections import defaultdict
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
+from hockey_blast_common_lib.progress_utils import create_progress_tracker
 
 def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_filter_out, debug_human_id=None, aggregation_window=None):
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
@@ -190,33 +191,51 @@ def run_aggregate_goalie_stats():
 
     for org_id in org_ids:
         division_ids = get_all_division_ids_for_org(session, org_id)
-        print(f"Aggregating goalie stats for {len(division_ids)} divisions in org_id {org_id}...")
-        total_divisions = len(division_ids)
-        processed_divisions = 0
-        for division_id in division_ids:
-            aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
-            aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
-            aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
-            processed_divisions += 1
-            if human_id_to_debug is None:
-                print(f"\rProcessed {processed_divisions}/{total_divisions} divisions ({(processed_divisions/total_divisions)*100:.2f}%)", end="")
-
-        aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
-        aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
-        aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+        org_name = session.query(Organization.organization_name).filter(Organization.id == org_id).scalar() or f"org_id {org_id}"
         
-        # Aggregate by level
-    level_ids = session.query(Division.level_id).distinct().all()
-    level_ids = [level_id[0] for level_id in level_ids]
-    total_levels = len(level_ids)
-    processed_levels = 0
-    for level_id in level_ids:
-        if level_id is None:
-            continue
+        if human_id_to_debug is None and division_ids:
+            # Process divisions with progress tracking
+            progress = create_progress_tracker(len(division_ids), f"Processing {len(division_ids)} divisions for {org_name}")
+            for i, division_id in enumerate(division_ids):
+                aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+                aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+                aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+                progress.update(i + 1)
+        else:
+            # Debug mode or no divisions - process without progress tracking
+            for division_id in division_ids:
+                aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+                aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+                aggregate_goalie_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+
+        # Process org-level stats with progress tracking
         if human_id_to_debug is None:
-            print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
-        processed_levels += 1
-        aggregate_goalie_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            org_progress = create_progress_tracker(3, f"Processing org-level stats for {org_name}")
+            aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            org_progress.update(1)
+            aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+            org_progress.update(2)
+            aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+            org_progress.update(3)
+        else:
+            aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+            aggregate_goalie_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+        
+    # Aggregate by level
+    level_ids = session.query(Division.level_id).distinct().all()
+    level_ids = [level_id[0] for level_id in level_ids if level_id[0] is not None]
+    
+    if human_id_to_debug is None and level_ids:
+        # Process levels with progress tracking
+        level_progress = create_progress_tracker(len(level_ids), f"Processing {len(level_ids)} skill levels")
+        for i, level_id in enumerate(level_ids):
+            aggregate_goalie_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            level_progress.update(i + 1)
+    else:
+        # Debug mode or no levels - process without progress tracking
+        for level_id in level_ids:
+            aggregate_goalie_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
 
 if __name__ == "__main__":
     run_aggregate_goalie_stats()

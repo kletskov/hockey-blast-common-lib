@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from hockey_blast_common_lib.models import Level, Division
 from hockey_blast_common_lib.stats_models import LevelsGraphEdge, LevelStatsSkater, SkillValuePPGRatio
 from hockey_blast_common_lib.db_connection import create_session
+from hockey_blast_common_lib.progress_utils import create_progress_tracker
 from sqlalchemy import func
 
 import numpy as np
@@ -56,10 +57,11 @@ def reset_skill_values_in_divisions():
             # If no match found, check each alternative name individually
             skills = session.query(Level).filter(Level.org_id == division.org_id).all()
             for s in skills:
-                alternative_names = s.level_alternative_name.split(',')
-                if div_level in alternative_names:
-                    level = s
-                    break
+                if s.level_alternative_name:  # Check if not None
+                    alternative_names = s.level_alternative_name.split(',')
+                    if div_level in alternative_names:
+                        level = s
+                        break
 
         if level:
             # Assign the skill_value and set skill_propagation_sequence to 0
@@ -70,19 +72,30 @@ def reset_skill_values_in_divisions():
                 level.skill_propagation_sequence = -1
                 level.skill_value = -1
         else:
-            # Add new Skill with values previously used for division
-            new_level = Level(
-                org_id=division.org_id,
-                skill_value=-1,
-                level_name=division.level,
-                level_alternative_name='',
-                is_seed=False,
-                skill_propagation_sequence=-1
-            )
-            session.add(new_level)
-            session.commit()
-            division.skill_id = new_level.id
-            print(f"Created new Level for Division {division.level}")
+            # Check if level already exists with this org_id/level_name combination
+            existing_level = session.query(Level).filter(
+                Level.org_id == division.org_id,
+                Level.level_name == division.level
+            ).first()
+            
+            if existing_level:
+                # Use existing level
+                division.level_id = existing_level.id
+                print(f"Using existing Level for Division {division.level}")
+            else:
+                # Add new Skill with values previously used for division
+                new_level = Level(
+                    org_id=division.org_id,
+                    skill_value=-1,
+                    level_name=division.level,
+                    level_alternative_name='',
+                    is_seed=False,
+                    skill_propagation_sequence=-1
+                )
+                session.add(new_level)
+                session.commit()
+                division.level_id = new_level.id
+                print(f"Created new Level for Division {division.level}")
 
         # Commit the changes to the Division
         session.commit()
@@ -113,14 +126,20 @@ def build_levels_graph_edges():
     # Dictionary to store edges
     edges = {}
 
-    # Build edges
+    # Build edges - batch load all levels first for performance
+    all_level_ids = list(level_human_stats.keys())
+    levels_dict = {level.id: level for level in session.query(Level).filter(Level.id.in_(all_level_ids)).all()}
+    
     total_levels = len(level_human_stats)
+    progress = create_progress_tracker(total_levels, "Building level graph edges")
     processed_levels = 0
     for from_level_id, from_humans in level_human_stats.items():
-        from_level = session.query(Level).filter_by(id=from_level_id).first()
+        from_level = levels_dict.get(from_level_id)
+        if not from_level:
+            continue
         for to_level_id, to_humans in level_human_stats.items():
-            to_level = session.query(Level).filter_by(id=to_level_id).first()
-            if from_level.id >= to_level.id:
+            to_level = levels_dict.get(to_level_id)
+            if not to_level or from_level.id >= to_level.id:
                 continue
 
             common_humans = set(from_humans.keys()) & set(to_humans.keys())
@@ -171,7 +190,7 @@ def build_levels_graph_edges():
             edges[(from_level_id, to_level_id)] = edge
 
         processed_levels += 1
-        print(f"\rProcessed {processed_levels}/{total_levels} levels ({(processed_levels/total_levels)*100:.2f}%)", end="")
+        progress.update(processed_levels)
 
     # Insert edges into the database
     for edge in edges.values():
@@ -313,12 +332,12 @@ def propagate_skill_levels(propagation_sequence):
                         # First confirm which way are we going here
                         if (ppg_ratio_edge < 1 and correlation.ppg_ratio > 1) or (ppg_ratio_edge > 1 and correlation.ppg_ratio < 1):
                             # Reverse the correlation
-                            from_skill_value=correlation.to_skill_value
-                            to_skill_value=correlation.from_skill_value
+                            from_skill_value = correlation.to_skill_value
+                            to_skill_value = correlation.from_skill_value
                             ppg_ratio_range = 1 / correlation.ppg_ratio
                         else:
-                            from_skill_value=correlation.from_skill_value
-                            to_skill_value=correlation.to_skill_value
+                            from_skill_value = correlation.from_skill_value
+                            to_skill_value = correlation.to_skill_value
                             ppg_ratio_range = correlation.ppg_ratio
 
                         # Now both ratios are either < 1 or > 1
@@ -345,6 +364,7 @@ def propagate_skill_levels(propagation_sequence):
                     suggested_skill_values[target_level_id].append(weighted_avg_skill_value)
 
     # Update skill values for target levels
+    session.flush()  # Ensure all previous changes are flushed before updates
     for target_level_id, skill_values in suggested_skill_values.items():
         skill_values = Config.discard_outliers(np.array(skill_values))
         if len(skill_values) > 0:
@@ -352,10 +372,16 @@ def propagate_skill_levels(propagation_sequence):
             avg_skill_value = max(avg_skill_value, 9.6)
             if avg_skill_value < min_skill_value:
                 avg_skill_value = min_skill_value - 0.01
-            session.query(Level).filter_by(id=target_level_id).update({
-                'skill_value': avg_skill_value,
-                'skill_propagation_sequence': propagation_sequence + 1
-            })
+            try:
+                session.query(Level).filter_by(id=target_level_id).update({
+                    'skill_value': avg_skill_value,
+                    'skill_propagation_sequence': propagation_sequence + 1
+                })
+                session.flush()  # Flush each update individually
+            except Exception as e:
+                print(f"Error updating level {target_level_id}: {e}")
+                session.rollback()
+                continue
     session.commit()
 
     print(f"Skill levels have been propagated for sequence {propagation_sequence}.")

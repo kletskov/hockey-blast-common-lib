@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from hockey_blast_common_lib.models import Game, GameRoster, Goal, Penalty
 from hockey_blast_common_lib.h2h_models import H2HStats, H2HStatsMeta
 from hockey_blast_common_lib.db_connection import create_session
+from hockey_blast_common_lib.progress_utils import create_progress_tracker
 from sqlalchemy.sql import func
 from sqlalchemy import types
 
@@ -41,6 +42,9 @@ def aggregate_h2h_stats():
 
     total_games = games_query.count()
     print(f"Total games to process: {total_games}")
+    
+    # Create progress tracker
+    progress = create_progress_tracker(total_games, "Processing H2H stats")
     processed = 0
     latest_game_id = None
     for game in games_query:
@@ -191,14 +195,11 @@ def aggregate_h2h_stats():
                 # --- TODO: Add more detailed logic for goalie/skater, referee/player, shootouts, etc. ---
         latest_game_id = game.id
         processed += 1
-        if processed % 10 == 0 or processed == total_games:
-            print(f"\rProcessed {processed}/{total_games} games ({(processed/total_games)*100:.2f}%)", end="")
-            sys.stdout.flush()
+        progress.update(processed)
     # Commit all stats at once
     session.query(H2HStats).delete()
     session.add_all(list(h2h_stats_dict.values()))
     session.commit()
-    print(f"\rProcessed {processed}/{total_games} games (100.00%)")
     # Save/update meta
     meta = H2HStatsMeta(
         last_run_timestamp=datetime.utcnow(),
