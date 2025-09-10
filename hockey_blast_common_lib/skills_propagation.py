@@ -11,6 +11,7 @@ from hockey_blast_common_lib.stats_models import LevelsGraphEdge, LevelStatsSkat
 from hockey_blast_common_lib.db_connection import create_session
 from hockey_blast_common_lib.progress_utils import create_progress_tracker
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 import numpy as np
 
@@ -93,9 +94,22 @@ def reset_skill_values_in_divisions():
                     skill_propagation_sequence=-1
                 )
                 session.add(new_level)
-                session.commit()
-                division.level_id = new_level.id
-                print(f"Created new Level for Division {division.level}")
+                try:
+                    session.commit()
+                    division.level_id = new_level.id
+                    print(f"Created new Level for Division {division.level}")
+                except IntegrityError:
+                    session.rollback()
+                    # Another process created this level, query for it
+                    existing_level = session.query(Level).filter(
+                        Level.org_id == division.org_id,
+                        Level.level_name == division.level
+                    ).first()
+                    if existing_level:
+                        division.level_id = existing_level.id
+                        print(f"Race condition resolved - using existing Level for Division {division.level}")
+                    else:
+                        raise RuntimeError(f"Unable to create or find level: {division.level} for org_id: {division.org_id}")
 
         # Commit the changes to the Division
         session.commit()
