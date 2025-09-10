@@ -322,7 +322,11 @@ class Shootout(db.Model):
 class Team(db.Model):
     __tablename__ = 'teams'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    __table_args__ = (
+        db.UniqueConstraint('org_id', 'name', name='_org_team_name_uc'),
+    )
 
 class TeamDivision(db.Model):
     __tablename__ = 'teams_divisions'
