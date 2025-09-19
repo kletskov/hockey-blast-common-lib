@@ -26,7 +26,7 @@ def calculate_skater_skill_value(session, level_stats):
         
         # Apply skill adjustment: range from 0.8 to 1.2 of level base skill
         # Since lower skill_value is better: Best player gets 0.8x (closer to better levels), worst gets 1.2x
-        skill_adjustment = 1.2 - 0.4 * ppg_skill_factor
+        skill_adjustment = 1.3 - 0.2 * ppg_skill_factor
         skill_value = level_skill_value * skill_adjustment
         
         # Take the minimum skill value across all levels the player has played in (lower is better)
@@ -43,14 +43,25 @@ def assign_skater_skill_values():
     # Create progress tracker
     progress = create_progress_tracker(total_humans, "Assigning skater skill values")
 
+    batch_size = 1000
+    updates_count = 0
+
     for i, human in enumerate(humans):
         level_stats = session.query(LevelStatsSkater).filter(LevelStatsSkater.human_id == human.id).all()
         if level_stats:
             skater_skill_value = calculate_skater_skill_value(session, level_stats)
             human.skater_skill_value = skater_skill_value
+            updates_count += 1
+
+        # Commit in batches
+        if updates_count % batch_size == 0:
             session.commit()
 
         progress.update(i + 1)
+
+    # Commit any remaining updates
+    if updates_count % batch_size != 0:
+        session.commit()
 
     print("Skater skill values have been assigned to all humans.")
 

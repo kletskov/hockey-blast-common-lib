@@ -52,6 +52,8 @@ class Game(db.Model):
     home_period_1_score = db.Column(db.Integer)
     home_period_2_score = db.Column(db.Integer)
     home_period_3_score = db.Column(db.Integer)
+    home_ot_score = db.Column(db.Integer, default=0)
+    visitor_ot_score = db.Column(db.Integer, default=0)
     game_type = db.Column(db.String(50))
     went_to_ot = db.Column(db.Boolean, default=False)
     home_period_1_shots = db.Column(db.Integer)
@@ -92,6 +94,7 @@ class Goal(db.Model):
     goal_scorer_id = db.Column(db.Integer, db.ForeignKey('humans.id'))
     assist_1_id = db.Column(db.Integer, db.ForeignKey('humans.id'))
     assist_2_id = db.Column(db.Integer, db.ForeignKey('humans.id'))
+    goalie_id = db.Column(db.Integer, db.ForeignKey('humans.id'), nullable=True)  # Goalie who allowed the goal (can be "Empty Net" special human)
     special_condition = db.Column(db.String(50))  # e.g., PP (power play), SH (short-handed)
     sequence_number = db.Column(db.Integer)
     __table_args__ = (
@@ -356,6 +359,31 @@ class RequestLog(db.Model):
     timestamp = db.Column(db.DateTime, nullable=False)
     cgi_params = db.Column(db.String, nullable=True)
     response_time_ms = db.Column(db.Float, nullable=True)  # Response time in milliseconds
+
+class GoalieSaves(db.Model):
+    __tablename__ = 'goalie_saves'
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=False)
+    goalie_id = db.Column(db.Integer, db.ForeignKey('humans.id'), nullable=False)
+    saves_count = db.Column(db.Integer, nullable=False, default=0)
+    shots_against = db.Column(db.Integer, nullable=False, default=0)
+    goals_allowed = db.Column(db.Integer, nullable=False, default=0)
+    __table_args__ = (
+        db.UniqueConstraint('game_id', 'goalie_id', name='_game_goalie_saves_uc'),
+    )
+
+class ScorekeeperSaveQuality(db.Model):
+    __tablename__ = 'scorekeeper_save_quality'
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=False)
+    scorekeeper_id = db.Column(db.Integer, db.ForeignKey('humans.id'), nullable=False)
+    total_saves_recorded = db.Column(db.Integer, nullable=False, default=0)
+    max_saves_per_5sec = db.Column(db.Integer, nullable=False, default=0)  # Highest saves in any 5-second window
+    max_saves_per_20sec = db.Column(db.Integer, nullable=False, default=0)  # Highest saves in any 20-second window
+    saves_timestamps = db.Column(db.JSON, nullable=True)  # JSONB with home_saves/away_saves arrays of decisecond timestamps
+    __table_args__ = (
+        db.UniqueConstraint('game_id', 'scorekeeper_id', name='_game_scorekeeper_quality_uc'),
+    )
 
 # # MANUAL AMENDS HAPPEN HERE :)
 # from db_connection import create_session
