@@ -104,14 +104,18 @@ class Goal(db.Model):
 class Human(db.Model):
     __tablename__ = 'humans'
     id = db.Column(db.Integer, primary_key=True)
-    first_name = db.Column(db.String(100))
-    middle_name = db.Column(db.String(100))
-    last_name = db.Column(db.String(100))
+    # All name components now declared non-nullable at the ORM level. Ensure data cleanup
+    # (convert existing NULLs to '') BEFORE applying a DB migration that enforces NOT NULL.
+    # middle_name and suffix may be logically "empty" but must not be NULL; use '' for absence.
+    first_name = db.Column(db.String(100), nullable=False, default='')
+    middle_name = db.Column(db.String(100), nullable=False, default='')
+    last_name = db.Column(db.String(100), nullable=False, default='')
+    suffix = db.Column(db.String(100), nullable=False, default='')
     first_date = db.Column(db.Date)
     last_date = db.Column(db.Date)
     skater_skill_value = db.Column(db.Float, nullable=True)
     __table_args__ = (
-        db.UniqueConstraint('first_name', 'middle_name', 'last_name', name='_human_name_uc'),
+        db.UniqueConstraint('first_name', 'middle_name', 'last_name', 'suffix', name='_human_name_uc'),
     )
 
 class HumanAlias(db.Model):
@@ -121,10 +125,11 @@ class HumanAlias(db.Model):
     first_name = db.Column(db.String(100))
     middle_name = db.Column(db.String(100))
     last_name = db.Column(db.String(100))
+    suffix = db.Column(db.String(100))
     first_date = db.Column(db.Date)
     last_date = db.Column(db.Date)
     __table_args__ = (
-        db.UniqueConstraint('human_id', 'first_name', 'middle_name', 'last_name', name='_human_alias_uc'),
+        db.UniqueConstraint('human_id', 'first_name', 'middle_name', 'last_name', 'suffix', name='_human_alias_uc'),
     )
 
 class HumanInTTS(db.Model):
