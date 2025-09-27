@@ -6,15 +6,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timedelta
 import sqlalchemy
 
-from hockey_blast_common_lib.models import Game, Goal, Penalty, GameRoster, Organization, Division, Human, Level
+from hockey_blast_common_lib.models import Game, Organization, Division, Human, GoalieSaves
 from hockey_blast_common_lib.stats_models import OrgStatsGoalie, DivisionStatsGoalie, OrgStatsWeeklyGoalie, OrgStatsDailyGoalie, DivisionStatsWeeklyGoalie, DivisionStatsDailyGoalie, LevelStatsGoalie
 from hockey_blast_common_lib.db_connection import create_session
-from sqlalchemy.sql import func, case
-from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
-from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org, get_start_datetime
+from sqlalchemy.sql import func
+from hockey_blast_common_lib.options import not_human_names, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
+from hockey_blast_common_lib.utils import get_human_ids_by_names, get_all_division_ids_for_org, get_start_datetime
 from hockey_blast_common_lib.utils import assign_ranks
-from sqlalchemy import func, case, and_
-from collections import defaultdict
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.progress_utils import create_progress_tracker
 
@@ -73,19 +71,20 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
             return
 
 
-    # Filter for specific human_id if provided
-    human_filter = []
-    # if debug_human_id:
-    #     human_filter = [GameRoster.human_id == debug_human_id]
+    # Aggregate games played, goals allowed, and shots faced for each goalie using GoalieSaves table
+    query = session.query(
+        GoalieSaves.goalie_id.label('human_id'),
+        func.count(GoalieSaves.game_id).label('games_played'),
+        func.sum(GoalieSaves.goals_allowed).label('goals_allowed'),
+        func.sum(GoalieSaves.shots_against).label('shots_faced'),
+        func.array_agg(GoalieSaves.game_id).label('game_ids')
+    ).join(Game, GoalieSaves.game_id == Game.id).join(Division, Game.division_id == Division.id).filter(filter_condition)
 
-    # Aggregate games played, goals allowed, and shots faced for each goalie
-    goalie_stats = session.query(
-        GameRoster.human_id,
-        func.count(Game.id).label('games_played'),
-        func.sum(case((GameRoster.team_id == Game.home_team_id, Game.visitor_final_score), else_=Game.home_final_score)).label('goals_allowed'),
-        func.sum(case((GameRoster.team_id == Game.home_team_id, Game.visitor_period_1_shots + Game.visitor_period_2_shots + Game.visitor_period_3_shots + Game.visitor_ot_shots + Game.visitor_so_shots), else_=Game.home_period_1_shots + Game.home_period_2_shots + Game.home_period_3_shots + Game.home_ot_shots + Game.home_so_shots)).label('shots_faced'),
-        func.array_agg(Game.id).label('game_ids')
-    ).join(Game, GameRoster.game_id == Game.id).join(Division, Game.division_id == Division.id).filter(filter_condition, GameRoster.role.ilike('g')).group_by(GameRoster.human_id).all()
+    # Filter for specific human_id if provided
+    if debug_human_id:
+        query = query.filter(GoalieSaves.goalie_id == debug_human_id)
+
+    goalie_stats = query.group_by(GoalieSaves.goalie_id).all()
 
     # Combine the results
     stats_dict = {}
@@ -152,7 +151,6 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, names_to_f
                         print(f"{k}: {v}")
 
     # Insert aggregated stats into the appropriate table with progress output
-    total_items = len(stats_dict)
     batch_size = 1000
     for i, (key, stat) in enumerate(stats_dict.items(), 1):
         aggregation_id, human_id = key
