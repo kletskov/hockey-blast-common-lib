@@ -176,6 +176,23 @@ class BaseStatsScorekeeper(db.Model):
     sog_given_rank = db.Column(db.Integer, default=0)
     sog_per_game = db.Column(db.Float, default=0.0)
     sog_per_game_rank = db.Column(db.Integer, default=0)
+
+    # Quality metrics fields
+    total_saves_recorded = db.Column(db.Integer, default=0)
+    total_saves_recorded_rank = db.Column(db.Integer, default=0)
+    avg_saves_per_game = db.Column(db.Float, default=0.0)
+    avg_saves_per_game_rank = db.Column(db.Integer, default=0)
+    avg_max_saves_per_5sec = db.Column(db.Float, default=0.0)
+    avg_max_saves_per_5sec_rank = db.Column(db.Integer, default=0)
+    avg_max_saves_per_20sec = db.Column(db.Float, default=0.0)
+    avg_max_saves_per_20sec_rank = db.Column(db.Integer, default=0)
+    peak_max_saves_per_5sec = db.Column(db.Integer, default=0)
+    peak_max_saves_per_5sec_rank = db.Column(db.Integer, default=0)
+    peak_max_saves_per_20sec = db.Column(db.Integer, default=0)
+    peak_max_saves_per_20sec_rank = db.Column(db.Integer, default=0)
+    quality_score = db.Column(db.Float, default=0.0)
+    quality_score_rank = db.Column(db.Integer, default=0)
+
     total_in_rank = db.Column(db.Integer, default=0)
     first_game_id = db.Column(db.Integer, db.ForeignKey('games.id'))
     last_game_id = db.Column(db.Integer, db.ForeignKey('games.id'))
@@ -186,7 +203,14 @@ class BaseStatsScorekeeper(db.Model):
             db.UniqueConstraint('human_id', cls.get_aggregation_column(), name=f'_human_{cls.aggregation_type}_uc_scorekeeper1'),
             db.Index(f'idx_{cls.aggregation_type}_games_recorded1', cls.get_aggregation_column(), 'games_recorded'),
             db.Index(f'idx_{cls.aggregation_type}_sog_given1', cls.get_aggregation_column(), 'sog_given'),
-            db.Index(f'idx_{cls.aggregation_type}_sog_per_game1', cls.get_aggregation_column(), 'sog_per_game')
+            db.Index(f'idx_{cls.aggregation_type}_sog_per_game1', cls.get_aggregation_column(), 'sog_per_game'),
+            db.Index(f'idx_{cls.aggregation_type}_total_saves_recorded1', cls.get_aggregation_column(), 'total_saves_recorded'),
+            db.Index(f'idx_{cls.aggregation_type}_avg_saves_per_game1', cls.get_aggregation_column(), 'avg_saves_per_game'),
+            db.Index(f'idx_{cls.aggregation_type}_avg_max_saves_per_5sec1', cls.get_aggregation_column(), 'avg_max_saves_per_5sec'),
+            db.Index(f'idx_{cls.aggregation_type}_avg_max_saves_per_20sec1', cls.get_aggregation_column(), 'avg_max_saves_per_20sec'),
+            db.Index(f'idx_{cls.aggregation_type}_peak_max_saves_per_5sec1', cls.get_aggregation_column(), 'peak_max_saves_per_5sec'),
+            db.Index(f'idx_{cls.aggregation_type}_peak_max_saves_per_20sec1', cls.get_aggregation_column(), 'peak_max_saves_per_20sec'),
+            db.Index(f'idx_{cls.aggregation_type}_quality_score1', cls.get_aggregation_column(), 'quality_score')
         )
 
     @classmethod
