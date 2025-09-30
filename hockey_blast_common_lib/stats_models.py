@@ -389,18 +389,6 @@ class OrgStatsScorekeeper(BaseStatsScorekeeper):
     def get_aggregation_column(cls):
         return 'org_id'
 
-class DivisionStatsScorekeeper(BaseStatsScorekeeper):
-    __tablename__ = 'division_stats_scorekeeper'
-    division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
-    aggregation_id = synonym('division_id')
-
-    @declared_attr
-    def aggregation_type(cls):
-        return 'division'
-
-    @classmethod
-    def get_aggregation_column(cls):
-        return 'division_id'
 
 class OrgStatsDailyHuman(BaseStatsHuman):
     __tablename__ = 'org_stats_daily_human'
@@ -636,31 +624,7 @@ class OrgStatsWeeklyScorekeeper(BaseStatsScorekeeper):
     def get_aggregation_column(cls):
         return 'org_id'
 
-class DivisionStatsDailyScorekeeper(BaseStatsScorekeeper):
-    __tablename__ = 'division_stats_daily_scorekeeper'
-    division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
-    aggregation_id = synonym('division_id')
 
-    @declared_attr
-    def aggregation_type(cls):
-        return 'division_daily'
-
-    @classmethod
-    def get_aggregation_column(cls):
-        return 'division_id'
-
-class DivisionStatsWeeklyScorekeeper(BaseStatsScorekeeper):
-    __tablename__ = 'division_stats_weekly_scorekeeper'
-    division_id = db.Column(db.Integer, db.ForeignKey('divisions.id'), nullable=False)
-    aggregation_id = synonym('division_id')
-
-    @declared_attr
-    def aggregation_type(cls):
-        return 'division_weekly'
-
-    @classmethod
-    def get_aggregation_column(cls):
-        return 'division_id'
 
 class LevelsGraphEdge(db.Model):
     __tablename__ = 'levels_graph_edges'

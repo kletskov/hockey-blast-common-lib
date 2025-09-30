@@ -6,12 +6,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timedelta
 import sqlalchemy
 
-from hockey_blast_common_lib.models import Game, Organization, Division, ScorekeeperSaveQuality
-from hockey_blast_common_lib.stats_models import OrgStatsScorekeeper, DivisionStatsScorekeeper, OrgStatsWeeklyScorekeeper, OrgStatsDailyScorekeeper, DivisionStatsWeeklyScorekeeper, DivisionStatsDailyScorekeeper
+from hockey_blast_common_lib.models import Game, ScorekeeperSaveQuality
+from hockey_blast_common_lib.stats_models import OrgStatsScorekeeper, OrgStatsWeeklyScorekeeper, OrgStatsDailyScorekeeper
 from hockey_blast_common_lib.db_connection import create_session
 from sqlalchemy.sql import func, case
 from hockey_blast_common_lib.options import parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, not_human_names
-from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
+from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names
 from hockey_blast_common_lib.utils import assign_ranks
 from hockey_blast_common_lib.utils import get_start_datetime
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
@@ -52,15 +52,16 @@ def calculate_quality_score(avg_max_saves_5sec, avg_max_saves_20sec, peak_max_sa
     return round(score, 2)
 
 def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, names_to_filter_out, aggregation_window=None):
+    # Only process scorekeeper stats for ALL_ORGS_ID - skip individual organizations
+    # This prevents redundant processing when upstream logic calls with all organization IDs
+    if aggregation_type == 'org' and aggregation_id != ALL_ORGS_ID:
+        return  # Do nothing for individual organization IDs
+
     human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
 
     if aggregation_type == 'org':
-        if aggregation_id == ALL_ORGS_ID:
-            aggregation_name = "All Orgs"
-            filter_condition = sqlalchemy.true()  # No filter for organization
-        else:
-            aggregation_name = session.query(Organization).filter(Organization.id == aggregation_id).first().organization_name
-            filter_condition = Game.org_id == aggregation_id
+        aggregation_name = "All Orgs"
+        filter_condition = sqlalchemy.true()  # No filter for organization
         print(f"Aggregating scorekeeper stats for {aggregation_name} with window {aggregation_window}...")
         if aggregation_window == 'Daily':
             StatsModel = OrgStatsDailyScorekeeper
@@ -69,15 +70,6 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, names
         else:
             StatsModel = OrgStatsScorekeeper
         min_games = MIN_GAMES_FOR_ORG_STATS
-    elif aggregation_type == 'division':
-        if aggregation_window == 'Daily':
-            StatsModel = DivisionStatsDailyScorekeeper
-        elif aggregation_window == 'Weekly':
-            StatsModel = DivisionStatsWeeklyScorekeeper
-        else:
-            StatsModel = DivisionStatsScorekeeper
-        min_games = MIN_GAMES_FOR_DIVISION_STATS
-        filter_condition = Game.division_id == aggregation_id
     else:
         raise ValueError("Invalid aggregation type")
 
@@ -95,8 +87,6 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, names
         else:
             return
 
-    if aggregation_type == 'division':
-        filter_condition = filter_condition & (Division.id == Game.division_id)
 
     # Aggregate scorekeeper quality data for each human
     scorekeeper_quality_stats = session.query(
@@ -111,8 +101,6 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, names
         func.array_agg(ScorekeeperSaveQuality.game_id).label('game_ids')
     ).join(Game, Game.id == ScorekeeperSaveQuality.game_id)
 
-    if aggregation_type == 'division':
-        scorekeeper_quality_stats = scorekeeper_quality_stats.join(Division, Game.division_id == Division.id)
 
     scorekeeper_quality_stats = scorekeeper_quality_stats.filter(filter_condition).group_by(ScorekeeperSaveQuality.scorekeeper_id).all()
 
@@ -175,7 +163,6 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, names
     assign_ranks(stats_dict, 'quality_score', reverse_rank=True)  # Lower is better (less problematic)
 
     # Insert aggregated stats into the appropriate table with progress output
-    total_items = len(stats_dict)
     batch_size = 1000
     for i, (key, stat) in enumerate(stats_dict.items(), 1):
         aggregation_id, human_id = key
@@ -216,32 +203,19 @@ def run_aggregate_scorekeeper_stats():
     session = create_session("boss")
     human_id_to_debug = None
 
-    # Get all org_id present in the Organization table
+    # Get all org_id present in the Organization table (following goalie stats pattern)
+    # Individual org calls will be skipped by early exit, only ALL_ORGS_ID will process
+    from hockey_blast_common_lib.models import Organization
     org_ids = session.query(Organization.id).all()
     org_ids = [org_id[0] for org_id in org_ids]
 
+    # Add ALL_ORGS_ID to the list so it gets processed
+    org_ids.append(ALL_ORGS_ID)
+
     for org_id in org_ids:
-        division_ids = get_all_division_ids_for_org(session, org_id)
-        org_name = session.query(Organization.organization_name).filter(Organization.id == org_id).scalar() or f"org_id {org_id}"
-
-        if human_id_to_debug is None and division_ids:
-            # Process divisions with progress tracking
-            progress = create_progress_tracker(len(division_ids), f"Processing {len(division_ids)} divisions for {org_name}")
-            for i, division_id in enumerate(division_ids):
-                aggregate_scorekeeper_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names)
-                aggregate_scorekeeper_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, aggregation_window='Weekly')
-                aggregate_scorekeeper_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, aggregation_window='Daily')
-                progress.update(i + 1)
-        else:
-            # Debug mode or no divisions - process without progress tracking
-            for division_id in division_ids:
-                aggregate_scorekeeper_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names)
-                aggregate_scorekeeper_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, aggregation_window='Weekly')
-                aggregate_scorekeeper_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, aggregation_window='Daily')
-
-        # Process org-level stats with progress tracking
         if human_id_to_debug is None:
-            org_progress = create_progress_tracker(3, f"Processing org-level stats for {org_name}")
+            org_name = "All Organizations" if org_id == ALL_ORGS_ID else session.query(Organization.organization_name).filter(Organization.id == org_id).scalar() or f"org_id {org_id}"
+            org_progress = create_progress_tracker(3, f"Processing scorekeeper stats for {org_name}")
             aggregate_scorekeeper_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names)
             org_progress.update(1)
             aggregate_scorekeeper_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, aggregation_window='Weekly')
