@@ -152,6 +152,19 @@ class HumansInLevels(db.Model):
         db.UniqueConstraint('levels_monthly_id', 'human_id', name='_levels_monthly_human_uc'),
     )
 
+class HumanPrivacyOptOut(db.Model):
+    __tablename__ = 'human_privacy_opt_outs'
+    id = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String(100), nullable=False)
+    middle_name = db.Column(db.String(100), nullable=False, default='')
+    last_name = db.Column(db.String(100), nullable=False)
+    suffix = db.Column(db.String(100), nullable=False, default='')
+    opt_out_date = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    notes = db.Column(db.Text, nullable=True)
+    __table_args__ = (
+        db.UniqueConstraint('first_name', 'middle_name', 'last_name', 'suffix', name='_privacy_optout_name_uc'),
+    )
+
 class League(db.Model):
     __tablename__ = 'leagues'
     id = db.Column(db.Integer, primary_key=True)
