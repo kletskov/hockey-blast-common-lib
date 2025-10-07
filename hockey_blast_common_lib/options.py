@@ -9,17 +9,6 @@ MIN_GAMES_FOR_LEVEL_STATS = 1
 
 orgs = {'caha', 'sharksice', 'tvice'}
 
-not_human_names = [
-    ("Home", None, None),
-    ("Away", None, None),
-    (None, "Unknown", None),
-    ("Not", None , None),
-    (None , None, "Goalie"),
-    ("Unassigned", None , None),
-    ("Not", "Signed", "In"),
-    ("Incognito", None , None)
-]
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Process data for a specific organization.")
     parser.add_argument("org", choices=orgs, help="The organization to process (e.g., 'caha', 'sharksice', 'tvice').")

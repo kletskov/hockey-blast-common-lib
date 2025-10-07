@@ -10,8 +10,8 @@ from hockey_blast_common_lib.models import Game, Goal, Penalty, GameRoster, Orga
 from hockey_blast_common_lib.stats_models import OrgStatsSkater, DivisionStatsSkater, OrgStatsWeeklySkater, OrgStatsDailySkater, DivisionStatsWeeklySkater, DivisionStatsDailySkater, LevelStatsSkater
 from hockey_blast_common_lib.db_connection import create_session
 from sqlalchemy.sql import func, case
-from hockey_blast_common_lib.options import not_human_names, parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
-from hockey_blast_common_lib.utils import get_org_id_from_alias, get_human_ids_by_names, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
+from hockey_blast_common_lib.options import parse_args, MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
+from hockey_blast_common_lib.utils import get_org_id_from_alias, get_non_human_ids, get_division_ids_for_last_season_in_all_leagues, get_all_division_ids_for_org
 from hockey_blast_common_lib.utils import get_start_datetime
 from sqlalchemy import func, case, and_
 from collections import defaultdict
@@ -64,8 +64,8 @@ def calculate_current_point_streak(session, human_id, filter_condition):
     
     return current_streak, avg_points_during_streak
 
-def aggregate_skater_stats(session, aggregation_type, aggregation_id, names_to_filter_out, debug_human_id=None, aggregation_window=None):
-    human_ids_to_filter = get_human_ids_by_names(session, names_to_filter_out)
+def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_human_id=None, aggregation_window=None):
+    human_ids_to_filter = get_non_human_ids(session)
 
     # Get the name of the aggregation, for debug purposes
     if aggregation_type == 'org':
@@ -382,30 +382,30 @@ def run_aggregate_skater_stats():
             # Process divisions with progress tracking
             progress = create_progress_tracker(len(division_ids), f"Processing {len(division_ids)} divisions for {org_name}")
             for i, division_id in enumerate(division_ids):
-                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
-                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
-                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, debug_human_id=human_id_to_debug)
+                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, debug_human_id=human_id_to_debug, aggregation_window='Daily')
                 progress.update(i + 1)
         else:
             # Debug mode or no divisions - process without progress tracking
             for division_id in division_ids:
-                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
-                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
-                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, debug_human_id=human_id_to_debug)
+                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+                aggregate_skater_stats(session, aggregation_type='division', aggregation_id=division_id, debug_human_id=human_id_to_debug, aggregation_window='Daily')
 
         # Process org-level stats with progress tracking
         if human_id_to_debug is None:
             org_progress = create_progress_tracker(3, f"Processing org-level stats for {org_name}")
-            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, debug_human_id=human_id_to_debug)
             org_progress.update(1)
-            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
             org_progress.update(2)
-            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, debug_human_id=human_id_to_debug, aggregation_window='Daily')
             org_progress.update(3)
         else:
-            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
-            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
-            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug, aggregation_window='Daily')
+            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, debug_human_id=human_id_to_debug)
+            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, debug_human_id=human_id_to_debug, aggregation_window='Weekly')
+            aggregate_skater_stats(session, aggregation_type='org', aggregation_id=org_id, debug_human_id=human_id_to_debug, aggregation_window='Daily')
         
     # Aggregate by level
     level_ids = session.query(Division.level_id).distinct().all()
@@ -415,12 +415,12 @@ def run_aggregate_skater_stats():
         # Process levels with progress tracking
         level_progress = create_progress_tracker(len(level_ids), f"Processing {len(level_ids)} skill levels")
         for i, level_id in enumerate(level_ids):
-            aggregate_skater_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            aggregate_skater_stats(session, aggregation_type='level', aggregation_id=level_id, debug_human_id=human_id_to_debug)
             level_progress.update(i + 1)
     else:
         # Debug mode or no levels - process without progress tracking
         for level_id in level_ids:
-            aggregate_skater_stats(session, aggregation_type='level', aggregation_id=level_id, names_to_filter_out=not_human_names, debug_human_id=human_id_to_debug)
+            aggregate_skater_stats(session, aggregation_type='level', aggregation_id=level_id, debug_human_id=human_id_to_debug)
 
 if __name__ == "__main__":
     run_aggregate_skater_stats()

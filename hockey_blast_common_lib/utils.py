@@ -52,6 +52,24 @@ def get_human_ids_by_names(session, names):
         human_ids.update([result.id for result in results])
     return human_ids
 
+def get_non_human_ids(session):
+    """Get IDs of non-human entities (placeholder names, test accounts, etc.)
+
+    Returns set of human_ids that should be filtered out from statistics.
+    Filters out placeholder names like "Home", "Away", "Unknown", etc.
+    """
+    not_human_names = [
+        ("Home", None, None),
+        ("Away", None, None),
+        (None, "Unknown", None),
+        ("Not", None, None),
+        (None, None, "Goalie"),
+        ("Unassigned", None, None),
+        ("Not", "Signed", "In"),
+        ("Incognito", None, None)
+    ]
+    return get_human_ids_by_names(session, not_human_names)
+
 def get_division_ids_for_last_season_in_all_leagues(session, org_id):
     # # TODO = remove tmp hack
     # return get_all_division_ids_for_org(session, org_id)
