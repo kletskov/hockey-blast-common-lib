@@ -18,50 +18,65 @@ from collections import defaultdict
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.progress_utils import create_progress_tracker
 
+# Import status constants for game filtering
+FINAL_STATUS = "Final"
+FINAL_SO_STATUS = "Final(SO)"
+FORFEIT_STATUS = "FORFEIT"
+NOEVENTS_STATUS = "NOEVENTS"
+
 def calculate_current_point_streak(session, human_id, filter_condition):
     """
     Calculate the current point streak for a player.
     A point streak is consecutive games (from the most recent game backward) where the player had at least one point.
     Returns a tuple: (streak_length, average_points_during_streak)
+
+    Optimized to use CASE statements for conditional aggregation in a single query.
     """
-    # Get all games for this player ordered by date/time descending (most recent first)
-    games = session.query(Game).join(GameRoster, Game.id == GameRoster.game_id).filter(
+    # Get all games with their point totals in ONE query using CASE for conditional counting
+    game_points = session.query(
+        Game.id,
+        Game.date,
+        Game.time,
+        func.sum(case((Goal.goal_scorer_id == human_id, 1), else_=0)).label('goals'),
+        func.sum(case(
+            ((Goal.assist_1_id == human_id) | (Goal.assist_2_id == human_id), 1),
+            else_=0
+        )).label('assists')
+    ).join(
+        GameRoster, Game.id == GameRoster.game_id
+    ).outerjoin(
+        Goal, Game.id == Goal.game_id
+    ).filter(
         GameRoster.human_id == human_id,
         ~GameRoster.role.ilike('g'),  # Exclude goalie games
         filter_condition,
-        Game.status.like('Final%')  # Only final games
-    ).order_by(Game.date.desc(), Game.time.desc()).all()
-    
-    if not games:
+        (Game.status.like('Final%')) | (Game.status == 'NOEVENTS')  # Include Final and NOEVENTS games
+    ).group_by(
+        Game.id, Game.date, Game.time
+    ).order_by(
+        Game.date.desc(), Game.time.desc()
+    ).all()
+
+    if not game_points:
         return 0, 0.0
-    
+
     current_streak = 0
     total_points_in_streak = 0
-    
-    for game in games:
-        # Check if the player had any points in this game
-        goals = session.query(Goal).filter(
-            Goal.game_id == game.id,
-            Goal.goal_scorer_id == human_id
-        ).count()
-        
-        assists = session.query(Goal).filter(
-            Goal.game_id == game.id,
-            ((Goal.assist_1_id == human_id) | (Goal.assist_2_id == human_id))
-        ).count()
-        
-        total_points = goals + assists
-        
+
+    # Iterate through games from most recent to oldest
+    for game in game_points:
+        total_points = (game.goals or 0) + (game.assists or 0)
+
         if total_points > 0:
             current_streak += 1
             total_points_in_streak += total_points
         else:
             # Streak is broken, stop counting
             break
-    
+
     # Calculate average points during streak
     avg_points_during_streak = total_points_in_streak / current_streak if current_streak > 0 else 0.0
-    
+
     return current_streak, avg_points_during_streak
 
 def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_human_id=None, aggregation_window=None):
@@ -123,7 +138,7 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_huma
 
     # Apply aggregation window filter
     if aggregation_window:
-        last_game_datetime_str = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, Game.status.like('Final%')).scalar()
+        last_game_datetime_str = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, (Game.status.like('Final%')) | (Game.status == 'NOEVENTS')).scalar()
         start_datetime = get_start_datetime(last_game_datetime_str, aggregation_window)
         if start_datetime:
             game_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP).between(start_datetime, last_game_datetime_str)
@@ -138,16 +153,22 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_huma
     #     human_filter = [GameRoster.human_id == debug_human_id]
 
     # Aggregate games played for each human in each division, excluding goalies
+    # Filter games by status upfront for performance (avoid CASE statements on 200K+ rows)
+    # Only count games with these statuses: FINAL, FINAL_SO, FORFEIT, NOEVENTS
     games_played_query = session.query(
         GameRoster.human_id,
         func.count(Game.id).label('games_played'),
+        func.count(Game.id).label('games_participated'),  # Same as games_played after filtering
+        func.count(Game.id).label('games_with_stats'),  # Same as games_played after filtering
         func.array_agg(Game.id).label('game_ids')
-    ).join(Game, Game.id == GameRoster.game_id)
-    
+    ).join(Game, Game.id == GameRoster.game_id).filter(
+        Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS])
+    )
+
     # Only join Division if not level aggregation (since we filter on Game.division_id directly for levels)
     if aggregation_type != 'level':
         games_played_query = games_played_query.join(Division, Game.division_id == Division.id)
-    
+
     games_played_stats = games_played_query.filter(filter_condition, ~GameRoster.role.ilike('g'), *human_filter).group_by(GameRoster.human_id).all()
 
     # Aggregate goals for each human in each division, excluding goalies
@@ -206,7 +227,9 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_huma
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_played': 0,
+                'games_played': 0,  # DEPRECATED - for backward compatibility
+                'games_participated': 0,  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+                'games_with_stats': 0,  # Games with full stats: FINAL, FINAL_SO only
                 'goals': 0,
                 'assists': 0,
                 'penalties': 0,
@@ -224,6 +247,8 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_huma
                 'last_game_id': None
             }
         stats_dict[key]['games_played'] += stat.games_played
+        stats_dict[key]['games_participated'] += stat.games_participated
+        stats_dict[key]['games_with_stats'] += stat.games_with_stats
         stats_dict[key]['game_ids'].extend(stat.game_ids)
 
     # Filter out entries with games_played less than min_games
@@ -253,34 +278,61 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_huma
             stats_dict[key]['penalties'] += stat.penalties
             stats_dict[key]['gm_penalties'] += stat.gm_penalties  # Update GM penalties
 
-    # Calculate per game stats
+    # Calculate per game stats (using games_with_stats as denominator for accuracy)
     for key, stat in stats_dict.items():
-        if stat['games_played'] > 0:
-            stat['goals_per_game'] = stat['goals'] / stat['games_played']
-            stat['points_per_game'] = stat['points'] / stat['games_played']
-            stat['assists_per_game'] = stat['assists'] / stat['games_played']
-            stat['penalties_per_game'] = stat['penalties'] / stat['games_played']
-            stat['gm_penalties_per_game'] = stat['gm_penalties'] / stat['games_played']  # Calculate GM penalties per game
+        if stat['games_with_stats'] > 0:
+            stat['goals_per_game'] = stat['goals'] / stat['games_with_stats']
+            stat['points_per_game'] = stat['points'] / stat['games_with_stats']
+            stat['assists_per_game'] = stat['assists'] / stat['games_with_stats']
+            stat['penalties_per_game'] = stat['penalties'] / stat['games_with_stats']
+            stat['gm_penalties_per_game'] = stat['gm_penalties'] / stat['games_with_stats']  # Calculate GM penalties per game
 
     # Ensure all keys have valid human_id values
     stats_dict = {key: value for key, value in stats_dict.items() if key[1] is not None}
 
     # Populate first_game_id and last_game_id
-    for key, stat in stats_dict.items():
-        all_game_ids = stat['game_ids']
-        if all_game_ids:
-            first_game = session.query(Game).filter(Game.id.in_(all_game_ids)).order_by(Game.date, Game.time).first()
-            last_game = session.query(Game).filter(Game.id.in_(all_game_ids)).order_by(Game.date.desc(), Game.time.desc()).first()
-            stat['first_game_id'] = first_game.id if first_game else None
-            stat['last_game_id'] = last_game.id if last_game else None
+    # Only show progress for "All Orgs" with no window (all-time stats) - the slowest case
+    total_players = len(stats_dict)
+    if aggregation_type == 'org' and aggregation_id == ALL_ORGS_ID and aggregation_window is None and total_players > 1000:
+        progress = create_progress_tracker(total_players, f"Processing {total_players} players for {aggregation_name}")
+        for idx, (key, stat) in enumerate(stats_dict.items()):
+            all_game_ids = stat['game_ids']
+            if all_game_ids:
+                first_game = session.query(Game).filter(Game.id.in_(all_game_ids)).order_by(Game.date, Game.time).first()
+                last_game = session.query(Game).filter(Game.id.in_(all_game_ids)).order_by(Game.date.desc(), Game.time.desc()).first()
+                stat['first_game_id'] = first_game.id if first_game else None
+                stat['last_game_id'] = last_game.id if last_game else None
+            if (idx + 1) % 100 == 0 or (idx + 1) == total_players:  # Update every 100 players
+                progress.update(idx + 1)
+    else:
+        # No progress tracking for all other cases
+        for key, stat in stats_dict.items():
+            all_game_ids = stat['game_ids']
+            if all_game_ids:
+                first_game = session.query(Game).filter(Game.id.in_(all_game_ids)).order_by(Game.date, Game.time).first()
+                last_game = session.query(Game).filter(Game.id.in_(all_game_ids)).order_by(Game.date.desc(), Game.time.desc()).first()
+                stat['first_game_id'] = first_game.id if first_game else None
+                stat['last_game_id'] = last_game.id if last_game else None
 
     # Calculate current point streak (only for all-time stats)
     if aggregation_window is None:
-        for key, stat in stats_dict.items():
-            aggregation_id, human_id = key
-            streak_length, avg_points = calculate_current_point_streak(session, human_id, filter_condition)
-            stat['current_point_streak'] = streak_length
-            stat['current_point_streak_avg_points'] = avg_points
+        total_players = len(stats_dict)
+        # Show progress for All Orgs - this is the slowest part
+        if aggregation_type == 'org' and aggregation_id == ALL_ORGS_ID and total_players > 1000:
+            progress = create_progress_tracker(total_players, f"Calculating point streaks for {total_players} players")
+            for idx, (key, stat) in enumerate(stats_dict.items()):
+                agg_id, human_id = key
+                streak_length, avg_points = calculate_current_point_streak(session, human_id, filter_condition)
+                stat['current_point_streak'] = streak_length
+                stat['current_point_streak_avg_points'] = avg_points
+                if (idx + 1) % 100 == 0 or (idx + 1) == total_players:
+                    progress.update(idx + 1)
+        else:
+            for key, stat in stats_dict.items():
+                agg_id, human_id = key
+                streak_length, avg_points = calculate_current_point_streak(session, human_id, filter_condition)
+                stat['current_point_streak'] = streak_length
+                stat['current_point_streak_avg_points'] = avg_points
 
     # Calculate total_in_rank
     total_in_rank = len(stats_dict)
@@ -292,6 +344,8 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_huma
             stats_dict[key][f'{field}_rank'] = rank
 
     assign_ranks(stats_dict, 'games_played')
+    assign_ranks(stats_dict, 'games_participated')  # Rank by total participation
+    assign_ranks(stats_dict, 'games_with_stats')  # Rank by games with full stats
     assign_ranks(stats_dict, 'goals')
     assign_ranks(stats_dict, 'assists')
     assign_ranks(stats_dict, 'points')
@@ -330,7 +384,11 @@ def aggregate_skater_stats(session, aggregation_type, aggregation_id, debug_huma
         skater_stat = StatsModel(
             aggregation_id=aggregation_id,
             human_id=human_id,
-            games_played=stat['games_played'],
+            games_played=stat['games_played'],  # DEPRECATED - for backward compatibility
+            games_participated=stat['games_participated'],  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+            games_participated_rank=stat['games_participated_rank'],
+            games_with_stats=stat['games_with_stats'],  # Games with full stats: FINAL, FINAL_SO only
+            games_with_stats_rank=stat['games_with_stats_rank'],
             goals=stat['goals'],
             assists=stat['assists'],
             points=stat['goals'] + stat['assists'],

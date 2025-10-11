@@ -61,7 +61,7 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, human_id_fi
 
     # Apply aggregation window filter
     if aggregation_window:
-        last_game_datetime_str = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, Game.status.like('Final%')).scalar()
+        last_game_datetime_str = session.query(func.max(func.concat(Game.date, ' ', Game.time))).filter(filter_condition, (Game.status.like('Final%')) | (Game.status == 'NOEVENTS')).scalar()
         start_datetime = get_start_datetime(last_game_datetime_str, aggregation_window)
         if start_datetime:
             game_window_filter = func.cast(func.concat(Game.date, ' ', Game.time), sqlalchemy.types.TIMESTAMP).between(start_datetime, last_game_datetime_str)
@@ -75,8 +75,8 @@ def aggregate_human_stats(session, aggregation_type, aggregation_id, human_id_fi
     if human_id_filter:
         human_filter = [GameRoster.human_id == human_id_filter]
 
-    # Filter games by status
-    game_status_filter = Game.status.like('Final%')
+    # Filter games by status - include both Final and NOEVENTS games
+    game_status_filter = (Game.status.like('Final%')) | (Game.status == 'NOEVENTS')
 
     # Aggregate skater games played
     skater_stats = session.query(
