@@ -99,6 +99,7 @@ class Goal(db.Model):
     sequence_number = db.Column(db.Integer)
     __table_args__ = (
         db.UniqueConstraint('game_id', 'scoring_team_id', 'sequence_number', name='_goal_team_sequence_uc'),
+        db.UniqueConstraint('game_id', 'period', 'time', 'goal_scorer_id', 'scoring_team_id', name='uq_goals_no_duplicates'),
     )
 
 class Human(db.Model):

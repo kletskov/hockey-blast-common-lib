@@ -17,6 +17,12 @@ from hockey_blast_common_lib.utils import get_start_datetime
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.progress_utils import create_progress_tracker
 
+# Import status constants for game filtering
+FINAL_STATUS = "Final"
+FINAL_SO_STATUS = "Final(SO)"
+FORFEIT_STATUS = "FORFEIT"
+NOEVENTS_STATUS = "NOEVENTS"
+
 def calculate_quality_score(avg_max_saves_5sec, avg_max_saves_20sec, peak_max_saves_5sec, peak_max_saves_20sec):
     """
     Calculate a quality score based on excessive clicking patterns.
@@ -89,9 +95,14 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, aggre
 
 
     # Aggregate scorekeeper quality data for each human
+    # games_participated: Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
+    # games_with_stats: Count only FINAL, FINAL_SO (for per-game averages)
+    # Filter by game status upfront for performance
     scorekeeper_quality_stats = session.query(
         ScorekeeperSaveQuality.scorekeeper_id.label('human_id'),
         func.count(ScorekeeperSaveQuality.game_id).label('games_recorded'),
+        func.count(ScorekeeperSaveQuality.game_id).label('games_participated'),  # Same as games_recorded after filtering
+        func.count(ScorekeeperSaveQuality.game_id).label('games_with_stats'),  # Same as games_recorded after filtering
         func.sum(ScorekeeperSaveQuality.total_saves_recorded).label('total_saves_recorded'),
         func.avg(ScorekeeperSaveQuality.total_saves_recorded).label('avg_saves_per_game'),
         func.avg(ScorekeeperSaveQuality.max_saves_per_5sec).label('avg_max_saves_per_5sec'),
@@ -99,7 +110,9 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, aggre
         func.max(ScorekeeperSaveQuality.max_saves_per_5sec).label('peak_max_saves_per_5sec'),
         func.max(ScorekeeperSaveQuality.max_saves_per_20sec).label('peak_max_saves_per_20sec'),
         func.array_agg(ScorekeeperSaveQuality.game_id).label('game_ids')
-    ).join(Game, Game.id == ScorekeeperSaveQuality.game_id)
+    ).join(Game, Game.id == ScorekeeperSaveQuality.game_id).filter(
+        Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS])
+    )
 
 
     scorekeeper_quality_stats = scorekeeper_quality_stats.filter(filter_condition).group_by(ScorekeeperSaveQuality.scorekeeper_id).all()
@@ -120,7 +133,9 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, aggre
         )
 
         stats_dict[key] = {
-            'games_recorded': stat.games_recorded,
+            'games_recorded': stat.games_recorded,  # DEPRECATED - for backward compatibility
+            'games_participated': stat.games_participated,  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+            'games_with_stats': stat.games_with_stats,  # Games with full stats: FINAL, FINAL_SO only
             'sog_given': stat.total_saves_recorded,  # Legacy field name mapping
             'sog_per_game': stat.avg_saves_per_game or 0.0,  # Legacy field name mapping
             'total_saves_recorded': stat.total_saves_recorded,
@@ -152,6 +167,8 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, aggre
 
     # Assign ranks - note: for quality metrics, lower values are better (reverse_rank=True for avg and peak clicking)
     assign_ranks(stats_dict, 'games_recorded')
+    assign_ranks(stats_dict, 'games_participated')  # Rank by total participation
+    assign_ranks(stats_dict, 'games_with_stats')  # Rank by games with full stats
     assign_ranks(stats_dict, 'sog_given')  # Legacy field
     assign_ranks(stats_dict, 'sog_per_game')  # Legacy field
     assign_ranks(stats_dict, 'total_saves_recorded')
@@ -169,7 +186,11 @@ def aggregate_scorekeeper_stats(session, aggregation_type, aggregation_id, aggre
         scorekeeper_stat = StatsModel(
             aggregation_id=aggregation_id,
             human_id=human_id,
-            games_recorded=stat['games_recorded'],
+            games_recorded=stat['games_recorded'],  # DEPRECATED - for backward compatibility
+            games_participated=stat['games_participated'],  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+            games_participated_rank=stat['games_participated_rank'],
+            games_with_stats=stat['games_with_stats'],  # Games with full stats: FINAL, FINAL_SO only
+            games_with_stats_rank=stat['games_with_stats_rank'],
             sog_given=stat['sog_given'],  # Legacy field mapping
             sog_per_game=stat['sog_per_game'],  # Legacy field mapping
             total_saves_recorded=stat['total_saves_recorded'],

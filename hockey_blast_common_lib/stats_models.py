@@ -52,8 +52,12 @@ class BaseStatsSkater(db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey('humans.id'), nullable=False)
-    games_played = db.Column(db.Integer, default=0)
+    games_played = db.Column(db.Integer, default=0)  # DEPRECATED - use games_participated instead
     games_played_rank = db.Column(db.Integer, default=0)
+    games_participated = db.Column(db.Integer, default=0)  # Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
+    games_participated_rank = db.Column(db.Integer, default=0)
+    games_with_stats = db.Column(db.Integer, default=0)  # Count only FINAL, FINAL_SO
+    games_with_stats_rank = db.Column(db.Integer, default=0)
     goals = db.Column(db.Integer, default=0)
     goals_rank = db.Column(db.Integer, default=0)
     assists = db.Column(db.Integer, default=0)
@@ -104,8 +108,12 @@ class BaseStatsGoalie(db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey('humans.id'), nullable=False)
-    games_played = db.Column(db.Integer, default=0)
+    games_played = db.Column(db.Integer, default=0)  # DEPRECATED - use games_participated instead
     games_played_rank = db.Column(db.Integer, default=0)
+    games_participated = db.Column(db.Integer, default=0)  # Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
+    games_participated_rank = db.Column(db.Integer, default=0)
+    games_with_stats = db.Column(db.Integer, default=0)  # Count only FINAL, FINAL_SO
+    games_with_stats_rank = db.Column(db.Integer, default=0)
     goals_allowed = db.Column(db.Integer, default=0)
     goals_allowed_rank = db.Column(db.Integer, default=0)
     goals_allowed_per_game = db.Column(db.Float, default=0.0)
@@ -137,8 +145,12 @@ class BaseStatsReferee(db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey('humans.id'), nullable=False)
-    games_reffed = db.Column(db.Integer, default=0)
+    games_reffed = db.Column(db.Integer, default=0)  # DEPRECATED - use games_participated instead
     games_reffed_rank = db.Column(db.Integer, default=0)
+    games_participated = db.Column(db.Integer, default=0)  # Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
+    games_participated_rank = db.Column(db.Integer, default=0)
+    games_with_stats = db.Column(db.Integer, default=0)  # Count only FINAL, FINAL_SO (for per-game averages)
+    games_with_stats_rank = db.Column(db.Integer, default=0)
     penalties_given = db.Column(db.Integer, default=0)
     penalties_given_rank = db.Column(db.Integer, default=0)
     penalties_per_game = db.Column(db.Float, default=0.0)
@@ -170,8 +182,12 @@ class BaseStatsScorekeeper(db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey('humans.id'), nullable=False)
-    games_recorded = db.Column(db.Integer, default=0)
+    games_recorded = db.Column(db.Integer, default=0)  # DEPRECATED - use games_participated instead
     games_recorded_rank = db.Column(db.Integer, default=0)
+    games_participated = db.Column(db.Integer, default=0)  # Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
+    games_participated_rank = db.Column(db.Integer, default=0)
+    games_with_stats = db.Column(db.Integer, default=0)  # Count only FINAL, FINAL_SO (for per-game averages)
+    games_with_stats_rank = db.Column(db.Integer, default=0)
     sog_given = db.Column(db.Integer, default=0)
     sog_given_rank = db.Column(db.Integer, default=0)
     sog_per_game = db.Column(db.Float, default=0.0)

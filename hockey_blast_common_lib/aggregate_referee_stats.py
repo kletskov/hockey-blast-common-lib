@@ -17,6 +17,12 @@ from hockey_blast_common_lib.utils import get_start_datetime
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.progress_utils import create_progress_tracker
 
+# Import status constants for game filtering
+FINAL_STATUS = "Final"
+FINAL_SO_STATUS = "Final(SO)"
+FORFEIT_STATUS = "FORFEIT"
+NOEVENTS_STATUS = "NOEVENTS"
+
 def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregation_window=None):
     human_ids_to_filter = get_non_human_ids(session)
 
@@ -72,17 +78,26 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregati
 
     filter_condition = filter_condition & (Division.id == Game.division_id)
     # Aggregate games reffed for each referee
+    # games_participated: Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
+    # games_with_stats: Count only FINAL, FINAL_SO (for per-game averages)
+    # Filter by game status upfront for performance
+    status_filter = Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS])
+
     games_reffed_stats = session.query(
         Game.referee_1_id.label('human_id'),
         func.count(Game.id).label('games_reffed'),
+        func.count(Game.id).label('games_participated'),  # Same as games_reffed after filtering
+        func.count(Game.id).label('games_with_stats'),  # Same as games_reffed after filtering
         func.array_agg(Game.id).label('game_ids')
-    ).filter(filter_condition).group_by(Game.referee_1_id).all()
+    ).filter(filter_condition, status_filter).group_by(Game.referee_1_id).all()
 
     games_reffed_stats_2 = session.query(
         Game.referee_2_id.label('human_id'),
         func.count(Game.id).label('games_reffed'),
+        func.count(Game.id).label('games_participated'),  # Same as games_reffed after filtering
+        func.count(Game.id).label('games_with_stats'),  # Same as games_reffed after filtering
         func.array_agg(Game.id).label('game_ids')
-    ).filter(filter_condition).group_by(Game.referee_2_id).all()
+    ).filter(filter_condition, status_filter).group_by(Game.referee_2_id).all()
 
     # Aggregate penalties given for each referee
     penalties_given_stats = session.query(
@@ -101,7 +116,9 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregati
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_reffed': 0,
+                'games_reffed': 0,  # DEPRECATED - for backward compatibility
+                'games_participated': 0,  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+                'games_with_stats': 0,  # Games with full stats: FINAL, FINAL_SO only
                 'penalties_given': 0,
                 'gm_given': 0,
                 'penalties_per_game': 0.0,
@@ -111,6 +128,8 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregati
                 'last_game_id': None
             }
         stats_dict[key]['games_reffed'] += stat.games_reffed
+        stats_dict[key]['games_participated'] += stat.games_participated
+        stats_dict[key]['games_with_stats'] += stat.games_with_stats
         stats_dict[key]['game_ids'].extend(stat.game_ids)
 
     for stat in games_reffed_stats_2:
@@ -119,7 +138,9 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregati
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_reffed': 0,
+                'games_reffed': 0,  # DEPRECATED - for backward compatibility
+                'games_participated': 0,  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+                'games_with_stats': 0,  # Games with full stats: FINAL, FINAL_SO only
                 'penalties_given': 0,
                 'gm_given': 0,
                 'penalties_per_game': 0.0,
@@ -129,6 +150,8 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregati
                 'last_game_id': None
             }
         stats_dict[key]['games_reffed'] += stat.games_reffed
+        stats_dict[key]['games_participated'] += stat.games_participated
+        stats_dict[key]['games_with_stats'] += stat.games_with_stats
         stats_dict[key]['game_ids'].extend(stat.game_ids)
 
     # Filter out entries with games_reffed less than min_games
@@ -149,11 +172,11 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregati
                 stats_dict[key]['gm_given'] += stat.gm_given / 2
                 stats_dict[key]['game_ids'].append(stat.game_id)
 
-    # Calculate per game stats
+    # Calculate per game stats (using games_with_stats as denominator for accuracy)
     for key, stat in stats_dict.items():
-        if stat['games_reffed'] > 0:
-            stat['penalties_per_game'] = stat['penalties_given'] / stat['games_reffed']
-            stat['gm_per_game'] = stat['gm_given'] / stat['games_reffed']
+        if stat['games_with_stats'] > 0:
+            stat['penalties_per_game'] = stat['penalties_given'] / stat['games_with_stats']
+            stat['gm_per_game'] = stat['gm_given'] / stat['games_with_stats']
 
     # Ensure all keys have valid human_id values
     stats_dict = {key: value for key, value in stats_dict.items() if key[1] is not None}
@@ -172,6 +195,8 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregati
 
     # Assign ranks
     assign_ranks(stats_dict, 'games_reffed')
+    assign_ranks(stats_dict, 'games_participated')  # Rank by total participation
+    assign_ranks(stats_dict, 'games_with_stats')  # Rank by games with full stats
     assign_ranks(stats_dict, 'penalties_given')
     assign_ranks(stats_dict, 'penalties_per_game')
     assign_ranks(stats_dict, 'gm_given')
@@ -185,7 +210,11 @@ def aggregate_referee_stats(session, aggregation_type, aggregation_id, aggregati
         referee_stat = StatsModel(
             aggregation_id=aggregation_id,
             human_id=human_id,
-            games_reffed=stat['games_reffed'],
+            games_reffed=stat['games_reffed'],  # DEPRECATED - for backward compatibility
+            games_participated=stat['games_participated'],  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+            games_participated_rank=stat['games_participated_rank'],
+            games_with_stats=stat['games_with_stats'],  # Games with full stats: FINAL, FINAL_SO only
+            games_with_stats_rank=stat['games_with_stats_rank'],
             penalties_given=stat['penalties_given'],
             penalties_per_game=stat['penalties_per_game'],
             gm_given=stat['gm_given'],

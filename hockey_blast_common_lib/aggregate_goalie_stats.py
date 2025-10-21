@@ -9,12 +9,18 @@ import sqlalchemy
 from hockey_blast_common_lib.models import Game, Organization, Division, Human, GoalieSaves
 from hockey_blast_common_lib.stats_models import OrgStatsGoalie, DivisionStatsGoalie, OrgStatsWeeklyGoalie, OrgStatsDailyGoalie, DivisionStatsWeeklyGoalie, DivisionStatsDailyGoalie, LevelStatsGoalie
 from hockey_blast_common_lib.db_connection import create_session
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, case
 from hockey_blast_common_lib.options import MIN_GAMES_FOR_ORG_STATS, MIN_GAMES_FOR_DIVISION_STATS, MIN_GAMES_FOR_LEVEL_STATS
 from hockey_blast_common_lib.utils import get_non_human_ids, get_all_division_ids_for_org, get_start_datetime
 from hockey_blast_common_lib.utils import assign_ranks
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.progress_utils import create_progress_tracker
+
+# Import status constants for game filtering
+FINAL_STATUS = "Final"
+FINAL_SO_STATUS = "Final(SO)"
+FORFEIT_STATUS = "FORFEIT"
+NOEVENTS_STATUS = "NOEVENTS"
 
 def aggregate_goalie_stats(session, aggregation_type, aggregation_id, debug_human_id=None, aggregation_window=None):
     human_ids_to_filter = get_non_human_ids(session)
@@ -72,13 +78,19 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, debug_huma
 
 
     # Aggregate games played, goals allowed, and shots faced for each goalie using GoalieSaves table
+    # Filter games by status upfront for performance (avoid CASE statements)
+    # Only count games with these statuses: FINAL, FINAL_SO, FORFEIT, NOEVENTS
     query = session.query(
         GoalieSaves.goalie_id.label('human_id'),
         func.count(GoalieSaves.game_id).label('games_played'),
+        func.count(GoalieSaves.game_id).label('games_participated'),  # Same as games_played after filtering
+        func.count(GoalieSaves.game_id).label('games_with_stats'),  # Same as games_played after filtering
         func.sum(GoalieSaves.goals_allowed).label('goals_allowed'),
         func.sum(GoalieSaves.shots_against).label('shots_faced'),
         func.array_agg(GoalieSaves.game_id).label('game_ids')
-    ).join(Game, GoalieSaves.game_id == Game.id).join(Division, Game.division_id == Division.id).filter(filter_condition)
+    ).join(Game, GoalieSaves.game_id == Game.id).filter(
+        Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS])
+    ).join(Division, Game.division_id == Division.id).filter(filter_condition)
 
     # Filter for specific human_id if provided
     if debug_human_id:
@@ -94,7 +106,9 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, debug_huma
         key = (aggregation_id, stat.human_id)
         if key not in stats_dict:
             stats_dict[key] = {
-                'games_played': 0,
+                'games_played': 0,  # DEPRECATED - for backward compatibility
+                'games_participated': 0,  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+                'games_with_stats': 0,  # Games with full stats: FINAL, FINAL_SO only
                 'goals_allowed': 0,
                 'shots_faced': 0,
                 'goals_allowed_per_game': 0.0,
@@ -104,6 +118,8 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, debug_huma
                 'last_game_id': None
             }
         stats_dict[key]['games_played'] += stat.games_played
+        stats_dict[key]['games_participated'] += stat.games_participated
+        stats_dict[key]['games_with_stats'] += stat.games_with_stats
         stats_dict[key]['goals_allowed'] += stat.goals_allowed if stat.goals_allowed is not None else 0
         stats_dict[key]['shots_faced'] += stat.shots_faced if stat.shots_faced is not None else 0
         stats_dict[key]['game_ids'].extend(stat.game_ids)
@@ -111,10 +127,10 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, debug_huma
     # Filter out entries with games_played less than min_games
     stats_dict = {key: value for key, value in stats_dict.items() if value['games_played'] >= min_games}
 
-    # Calculate per game stats
+    # Calculate per game stats (using games_with_stats as denominator for accuracy)
     for key, stat in stats_dict.items():
-        if stat['games_played'] > 0:
-            stat['goals_allowed_per_game'] = stat['goals_allowed'] / stat['games_played']
+        if stat['games_with_stats'] > 0:
+            stat['goals_allowed_per_game'] = stat['goals_allowed'] / stat['games_with_stats']
             stat['save_percentage'] = (stat['shots_faced'] - stat['goals_allowed']) / stat['shots_faced'] if stat['shots_faced'] > 0 else 0.0
 
     # Ensure all keys have valid human_id values
@@ -134,6 +150,8 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, debug_huma
 
     # Assign ranks within each level
     assign_ranks(stats_dict, 'games_played')
+    assign_ranks(stats_dict, 'games_participated')  # Rank by total participation
+    assign_ranks(stats_dict, 'games_with_stats')  # Rank by games with full stats
     assign_ranks(stats_dict, 'goals_allowed', reverse_rank=True)
     assign_ranks(stats_dict, 'shots_faced')
     assign_ranks(stats_dict, 'goals_allowed_per_game', reverse_rank=True)
@@ -159,7 +177,11 @@ def aggregate_goalie_stats(session, aggregation_type, aggregation_id, debug_huma
         goalie_stat = StatsModel(
             aggregation_id=aggregation_id,
             human_id=human_id,
-            games_played=stat['games_played'],
+            games_played=stat['games_played'],  # DEPRECATED - for backward compatibility
+            games_participated=stat['games_participated'],  # Total games: FINAL, FINAL_SO, FORFEIT, NOEVENTS
+            games_participated_rank=stat['games_participated_rank'],
+            games_with_stats=stat['games_with_stats'],  # Games with full stats: FINAL, FINAL_SO only
+            games_with_stats_rank=stat['games_with_stats_rank'],
             goals_allowed=stat['goals_allowed'],
             shots_faced=stat['shots_faced'],
             goals_allowed_per_game=goals_allowed_per_game,
