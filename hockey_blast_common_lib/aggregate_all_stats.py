@@ -1,13 +1,16 @@
-import sys, os
+import os
+import sys
 
 # Add the package directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hockey_blast_common_lib.aggregate_human_stats import run_aggregate_human_stats
-from hockey_blast_common_lib.aggregate_skater_stats import run_aggregate_skater_stats
 from hockey_blast_common_lib.aggregate_goalie_stats import run_aggregate_goalie_stats
+from hockey_blast_common_lib.aggregate_human_stats import run_aggregate_human_stats
 from hockey_blast_common_lib.aggregate_referee_stats import run_aggregate_referee_stats
-from hockey_blast_common_lib.aggregate_scorekeeper_stats import run_aggregate_scorekeeper_stats
+from hockey_blast_common_lib.aggregate_scorekeeper_stats import (
+    run_aggregate_scorekeeper_stats,
+)
+from hockey_blast_common_lib.aggregate_skater_stats import run_aggregate_skater_stats
 
 if __name__ == "__main__":
     print("Running aggregate_skater_stats...", flush=True)

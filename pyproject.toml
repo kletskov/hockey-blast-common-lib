@@ -1,0 +1,13 @@
+[tool.ruff]
+exclude = [".venv", "hockey_blast_common_lib/migrations"]
+
+[tool.isort]
+skip = [".venv", "hockey_blast_common_lib/migrations"]
+
+[tool.black]
+exclude = '''
+(
+    \.venv
+  | hockey_blast_common_lib/migrations
+)
+'''
