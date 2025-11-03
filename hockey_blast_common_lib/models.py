@@ -541,6 +541,24 @@ class ScorekeeperSaveQuality(db.Model):
     )
 
 
+class HumanEmbedding(db.Model):
+    """Vector embeddings for semantic search of humans (players/referees/scorekeepers)."""
+    __tablename__ = "human_embeddings"
+    human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), primary_key=True)
+    full_name = db.Column(db.String(255), nullable=False)
+    embedding = db.Column(db.Text, nullable=False)  # pgvector type, stored as text
+    updated_at = db.Column(db.DateTime, nullable=False)
+
+
+class TeamEmbedding(db.Model):
+    """Vector embeddings for semantic search of teams."""
+    __tablename__ = "team_embeddings"
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), primary_key=True)
+    team_name = db.Column(db.String(255), nullable=False)
+    embedding = db.Column(db.Text, nullable=False)  # pgvector type, stored as text
+    updated_at = db.Column(db.DateTime, nullable=False)
+
+
 # # MANUAL AMENDS HAPPEN HERE :)
 # from db_connection import create_session
 # session = create_session("sharksice")
