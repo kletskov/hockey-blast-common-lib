@@ -922,3 +922,126 @@ class SkillValuePPGRatio(db.Model):
             "from_skill_value", "to_skill_value", name="_from_to_skill_value_uc"
         ),
     )
+
+
+# Team-based statistics models (inherit from existing bases, add team_id field)
+class OrgStatsSkaterTeam(BaseStatsSkater):
+    __tablename__ = "org_stats_skater_team"
+    org_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False)
+    aggregation_id = synonym("org_id")
+
+    @declared_attr
+    def aggregation_type(cls):
+        return "org_team"
+
+    @classmethod
+    def get_aggregation_column(cls):
+        return "org_id"
+
+    @declared_attr
+    def __table_args__(cls):
+        return (
+            db.UniqueConstraint(
+                "org_id",
+                "team_id",
+                "human_id",
+                name="_org_team_human_uc_skater_team1",
+            ),
+            db.Index("idx_org_team_team_id", "team_id"),
+            db.Index("idx_org_team_human_id", "human_id"),
+            db.Index("idx_org_team_goals_per_game", "org_id", "goals_per_game"),
+            db.Index("idx_org_team_points_per_game", "org_id", "points_per_game"),
+            db.Index("idx_org_team_assists_per_game", "org_id", "assists_per_game"),
+        )
+
+
+class DivisionStatsSkaterTeam(BaseStatsSkater):
+    __tablename__ = "division_stats_skater_team"
+    division_id = db.Column(db.Integer, db.ForeignKey("divisions.id"), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False)
+    aggregation_id = synonym("division_id")
+
+    @declared_attr
+    def aggregation_type(cls):
+        return "division_team"
+
+    @classmethod
+    def get_aggregation_column(cls):
+        return "division_id"
+
+    @declared_attr
+    def __table_args__(cls):
+        return (
+            db.UniqueConstraint(
+                "division_id",
+                "team_id",
+                "human_id",
+                name="_division_team_human_uc_skater_team1",
+            ),
+            db.Index("idx_division_team_team_id", "team_id"),
+            db.Index("idx_division_team_human_id", "human_id"),
+            db.Index("idx_division_team_goals_per_game", "division_id", "goals_per_game"),
+            db.Index("idx_division_team_points_per_game", "division_id", "points_per_game"),
+            db.Index("idx_division_team_assists_per_game", "division_id", "assists_per_game"),
+        )
+
+
+class OrgStatsGoalieTeam(BaseStatsGoalie):
+    __tablename__ = "org_stats_goalie_team"
+    org_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False)
+    aggregation_id = synonym("org_id")
+
+    @declared_attr
+    def aggregation_type(cls):
+        return "org_team"
+
+    @classmethod
+    def get_aggregation_column(cls):
+        return "org_id"
+
+    @declared_attr
+    def __table_args__(cls):
+        return (
+            db.UniqueConstraint(
+                "org_id",
+                "team_id",
+                "human_id",
+                name="_org_team_human_uc_goalie_team1",
+            ),
+            db.Index("idx_org_team_goalie_team_id", "team_id"),
+            db.Index("idx_org_team_goalie_human_id", "human_id"),
+            db.Index("idx_org_team_goalie_save_pct", "org_id", "save_percentage"),
+            db.Index("idx_org_team_goalie_gaa", "org_id", "goals_allowed_per_game"),
+        )
+
+
+class DivisionStatsGoalieTeam(BaseStatsGoalie):
+    __tablename__ = "division_stats_goalie_team"
+    division_id = db.Column(db.Integer, db.ForeignKey("divisions.id"), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False)
+    aggregation_id = synonym("division_id")
+
+    @declared_attr
+    def aggregation_type(cls):
+        return "division_team"
+
+    @classmethod
+    def get_aggregation_column(cls):
+        return "division_id"
+
+    @declared_attr
+    def __table_args__(cls):
+        return (
+            db.UniqueConstraint(
+                "division_id",
+                "team_id",
+                "human_id",
+                name="_division_team_human_uc_goalie_team1",
+            ),
+            db.Index("idx_division_team_goalie_team_id", "team_id"),
+            db.Index("idx_division_team_goalie_human_id", "human_id"),
+            db.Index("idx_division_team_goalie_save_pct", "division_id", "save_percentage"),
+            db.Index("idx_division_team_goalie_gaa", "division_id", "goals_allowed_per_game"),
+        )

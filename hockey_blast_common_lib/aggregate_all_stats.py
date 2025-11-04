@@ -11,6 +11,12 @@ from hockey_blast_common_lib.aggregate_scorekeeper_stats import (
     run_aggregate_scorekeeper_stats,
 )
 from hockey_blast_common_lib.aggregate_skater_stats import run_aggregate_skater_stats
+from hockey_blast_common_lib.aggregate_team_goalie_stats import (
+    run_aggregate_team_goalie_stats,
+)
+from hockey_blast_common_lib.aggregate_team_skater_stats import (
+    run_aggregate_team_skater_stats,
+)
 
 if __name__ == "__main__":
     print("Running aggregate_skater_stats...", flush=True)
@@ -32,3 +38,11 @@ if __name__ == "__main__":
     print("Running aggregate_human_stats...", flush=True)
     run_aggregate_human_stats()
     print("Finished running aggregate_human_stats\n")
+
+    print("Running aggregate_team_skater_stats...", flush=True)
+    run_aggregate_team_skater_stats()
+    print("Finished running aggregate_team_skater_stats\n")
+
+    print("Running aggregate_team_goalie_stats...", flush=True)
+    run_aggregate_team_goalie_stats()
+    print("Finished running aggregate_team_goalie_stats\n")
