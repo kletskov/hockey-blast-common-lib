@@ -85,6 +85,7 @@ def get_non_human_ids(session):
 
     Returns set of human_ids that should be filtered out from statistics.
     Filters out placeholder names like "Home", "Away", "Unknown", etc.
+    Also excludes percentile marker humans.
     """
     not_human_names = [
         ("Home", None, None),
@@ -97,7 +98,9 @@ def get_non_human_ids(session):
         ("Incognito", None, None),
         ("Empty", None , "Net"),
         ("Fake", "Stats", "Human"),
+        (None, None, "Percentile"),
     ]
+
     return get_human_ids_by_names(session, not_human_names)
 
 
@@ -206,6 +209,67 @@ def get_fake_level(session):
         session.commit()
         print("Created special fake Skill record.")
     return fake_skill
+
+
+def get_percentile_human(session, entity_type, percentile):
+    """Get or create a human record representing a percentile marker.
+
+    Args:
+        session: Database session
+        entity_type: One of "Skater", "Goalie", "Ref", "Scorekeeper"
+        percentile: One of 25, 50, 75, 90, 95
+
+    Returns:
+        human_id of the percentile marker record
+    """
+    first_name = entity_type
+    middle_name = str(percentile)
+    last_name = "Percentile"
+
+    # Check if the human already exists
+    existing_human = (
+        session.query(Human)
+        .filter_by(first_name=first_name, middle_name=middle_name, last_name=last_name)
+        .first()
+    )
+    if existing_human:
+        return existing_human.id
+
+    # Create a new human
+    human = Human(first_name=first_name, middle_name=middle_name, last_name=last_name)
+    session.add(human)
+    session.commit()
+
+    return human.id
+
+
+def calculate_percentile_value(values, percentile):
+    """Calculate the percentile value from a list of values.
+
+    Args:
+        values: List of numeric values
+        percentile: Percentile to calculate (e.g., 25, 50, 75, 90, 95)
+
+    Returns:
+        The value at the given percentile
+    """
+    if not values:
+        return 0
+
+    sorted_values = sorted(values)
+    n = len(sorted_values)
+
+    # Calculate index (using linear interpolation method)
+    index = (percentile / 100.0) * (n - 1)
+    lower_index = int(index)
+    upper_index = min(lower_index + 1, n - 1)
+
+    # Interpolate if needed
+    fraction = index - lower_index
+    lower_value = sorted_values[lower_index]
+    upper_value = sorted_values[upper_index]
+
+    return lower_value + fraction * (upper_value - lower_value)
 
 
 # TEST DB CONNECTION, PERMISSIONS...

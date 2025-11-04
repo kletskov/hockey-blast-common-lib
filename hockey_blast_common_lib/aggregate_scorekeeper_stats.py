@@ -22,7 +22,9 @@ from hockey_blast_common_lib.stats_models import (
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.utils import (
     assign_ranks,
+    calculate_percentile_value,
     get_non_human_ids,
+    get_percentile_human,
     get_start_datetime,
 )
 
@@ -31,6 +33,77 @@ FINAL_STATUS = "Final"
 FINAL_SO_STATUS = "Final(SO)"
 FORFEIT_STATUS = "FORFEIT"
 NOEVENTS_STATUS = "NOEVENTS"
+
+
+def insert_percentile_markers_scorekeeper(
+    session, stats_dict, aggregation_id, total_in_rank, StatsModel
+):
+    """Insert percentile marker records for scorekeeper stats."""
+    if not stats_dict:
+        return
+
+    stat_fields = [
+        "games_recorded",
+        "games_participated",
+        "games_with_stats",
+        "sog_given",
+        "sog_per_game",
+        "total_saves_recorded",
+        "avg_saves_per_game",
+        "avg_max_saves_per_5sec",
+        "avg_max_saves_per_20sec",
+        "peak_max_saves_per_5sec",
+        "peak_max_saves_per_20sec",
+        "quality_score",
+    ]
+
+    percentiles = [25, 50, 75, 90, 95]
+
+    for percentile in percentiles:
+        percentile_human_id = get_percentile_human(session, "Scorekeeper", percentile)
+
+        percentile_values = {}
+        for field in stat_fields:
+            values = [stat[field] for stat in stats_dict.values() if field in stat]
+            if values:
+                percentile_values[field] = calculate_percentile_value(values, percentile)
+            else:
+                percentile_values[field] = 0
+
+        scorekeeper_stat = StatsModel(
+            aggregation_id=aggregation_id,
+            human_id=percentile_human_id,
+            games_recorded=int(percentile_values.get("games_recorded", 0)),
+            games_participated=int(percentile_values.get("games_participated", 0)),
+            games_participated_rank=0,
+            games_with_stats=int(percentile_values.get("games_with_stats", 0)),
+            games_with_stats_rank=0,
+            sog_given=int(percentile_values.get("sog_given", 0)),
+            sog_per_game=percentile_values.get("sog_per_game", 0.0),
+            total_saves_recorded=int(percentile_values.get("total_saves_recorded", 0)),
+            avg_saves_per_game=percentile_values.get("avg_saves_per_game", 0.0),
+            avg_max_saves_per_5sec=percentile_values.get("avg_max_saves_per_5sec", 0.0),
+            avg_max_saves_per_20sec=percentile_values.get("avg_max_saves_per_20sec", 0.0),
+            peak_max_saves_per_5sec=int(percentile_values.get("peak_max_saves_per_5sec", 0)),
+            peak_max_saves_per_20sec=int(percentile_values.get("peak_max_saves_per_20sec", 0)),
+            quality_score=percentile_values.get("quality_score", 0.0),
+            games_recorded_rank=0,
+            sog_given_rank=0,
+            sog_per_game_rank=0,
+            total_saves_recorded_rank=0,
+            avg_saves_per_game_rank=0,
+            avg_max_saves_per_5sec_rank=0,
+            avg_max_saves_per_20sec_rank=0,
+            peak_max_saves_per_5sec_rank=0,
+            peak_max_saves_per_20sec_rank=0,
+            quality_score_rank=0,
+            total_in_rank=total_in_rank,
+            first_game_id=None,
+            last_game_id=None,
+        )
+        session.add(scorekeeper_stat)
+
+    session.commit()
 
 
 def calculate_quality_score(
@@ -251,6 +324,11 @@ def aggregate_scorekeeper_stats(
     assign_ranks(
         stats_dict, "quality_score", reverse_rank=True
     )  # Lower is better (less problematic)
+
+    # Calculate and insert percentile marker records
+    insert_percentile_markers_scorekeeper(
+        session, stats_dict, aggregation_id, total_in_rank, StatsModel
+    )
 
     # Insert aggregated stats into the appropriate table with progress output
     batch_size = 1000

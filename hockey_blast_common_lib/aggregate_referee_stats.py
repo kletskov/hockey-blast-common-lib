@@ -29,8 +29,10 @@ from hockey_blast_common_lib.stats_models import (
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.utils import (
     assign_ranks,
+    calculate_percentile_value,
     get_all_division_ids_for_org,
     get_non_human_ids,
+    get_percentile_human,
     get_start_datetime,
 )
 
@@ -39,6 +41,62 @@ FINAL_STATUS = "Final"
 FINAL_SO_STATUS = "Final(SO)"
 FORFEIT_STATUS = "FORFEIT"
 NOEVENTS_STATUS = "NOEVENTS"
+
+
+def insert_percentile_markers_referee(
+    session, stats_dict, aggregation_id, total_in_rank, StatsModel
+):
+    """Insert percentile marker records for referee stats."""
+    if not stats_dict:
+        return
+
+    stat_fields = [
+        "games_reffed",
+        "games_participated",
+        "games_with_stats",
+        "penalties_given",
+        "penalties_per_game",
+        "gm_given",
+        "gm_per_game",
+    ]
+
+    percentiles = [25, 50, 75, 90, 95]
+
+    for percentile in percentiles:
+        percentile_human_id = get_percentile_human(session, "Ref", percentile)
+
+        percentile_values = {}
+        for field in stat_fields:
+            values = [stat[field] for stat in stats_dict.values() if field in stat]
+            if values:
+                percentile_values[field] = calculate_percentile_value(values, percentile)
+            else:
+                percentile_values[field] = 0
+
+        referee_stat = StatsModel(
+            aggregation_id=aggregation_id,
+            human_id=percentile_human_id,
+            games_reffed=int(percentile_values.get("games_reffed", 0)),
+            games_participated=int(percentile_values.get("games_participated", 0)),
+            games_participated_rank=0,
+            games_with_stats=int(percentile_values.get("games_with_stats", 0)),
+            games_with_stats_rank=0,
+            penalties_given=int(percentile_values.get("penalties_given", 0)),
+            penalties_per_game=percentile_values.get("penalties_per_game", 0.0),
+            gm_given=int(percentile_values.get("gm_given", 0)),
+            gm_per_game=percentile_values.get("gm_per_game", 0.0),
+            games_reffed_rank=0,
+            penalties_given_rank=0,
+            penalties_per_game_rank=0,
+            gm_given_rank=0,
+            gm_per_game_rank=0,
+            total_in_rank=total_in_rank,
+            first_game_id=None,
+            last_game_id=None,
+        )
+        session.add(referee_stat)
+
+    session.commit()
 
 
 def aggregate_referee_stats(
@@ -280,6 +338,11 @@ def aggregate_referee_stats(
     assign_ranks(stats_dict, "penalties_per_game")
     assign_ranks(stats_dict, "gm_given")
     assign_ranks(stats_dict, "gm_per_game")
+
+    # Calculate and insert percentile marker records
+    insert_percentile_markers_referee(
+        session, stats_dict, aggregation_id, total_in_rank, StatsModel
+    )
 
     # Insert aggregated stats into the appropriate table with progress output
     total_items = len(stats_dict)

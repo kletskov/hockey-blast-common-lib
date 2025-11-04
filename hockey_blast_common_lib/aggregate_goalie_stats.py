@@ -35,8 +35,10 @@ from hockey_blast_common_lib.stats_models import (
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.utils import (
     assign_ranks,
+    calculate_percentile_value,
     get_all_division_ids_for_org,
     get_non_human_ids,
+    get_percentile_human,
     get_start_datetime,
 )
 
@@ -45,6 +47,67 @@ FINAL_STATUS = "Final"
 FINAL_SO_STATUS = "Final(SO)"
 FORFEIT_STATUS = "FORFEIT"
 NOEVENTS_STATUS = "NOEVENTS"
+
+
+def insert_percentile_markers_goalie(
+    session, stats_dict, aggregation_id, total_in_rank, StatsModel
+):
+    """Insert percentile marker records for goalie stats.
+
+    For each stat field, calculate the 25th, 50th, 75th, 90th, and 95th percentile values
+    and insert marker records with fake human IDs.
+    """
+    if not stats_dict:
+        return
+
+    # Define the stat fields we want to calculate percentiles for
+    stat_fields = [
+        "games_played",
+        "games_participated",
+        "games_with_stats",
+        "goals_allowed",
+        "shots_faced",
+        "goals_allowed_per_game",
+        "save_percentage",
+    ]
+
+    percentiles = [25, 50, 75, 90, 95]
+
+    for percentile in percentiles:
+        percentile_human_id = get_percentile_human(session, "Goalie", percentile)
+
+        percentile_values = {}
+        for field in stat_fields:
+            values = [stat[field] for stat in stats_dict.values() if field in stat]
+            if values:
+                percentile_values[field] = calculate_percentile_value(values, percentile)
+            else:
+                percentile_values[field] = 0
+
+        goalie_stat = StatsModel(
+            aggregation_id=aggregation_id,
+            human_id=percentile_human_id,
+            games_played=int(percentile_values.get("games_played", 0)),
+            games_participated=int(percentile_values.get("games_participated", 0)),
+            games_participated_rank=0,
+            games_with_stats=int(percentile_values.get("games_with_stats", 0)),
+            games_with_stats_rank=0,
+            goals_allowed=int(percentile_values.get("goals_allowed", 0)),
+            shots_faced=int(percentile_values.get("shots_faced", 0)),
+            goals_allowed_per_game=percentile_values.get("goals_allowed_per_game", 0.0),
+            save_percentage=percentile_values.get("save_percentage", 0.0),
+            games_played_rank=0,
+            goals_allowed_rank=0,
+            shots_faced_rank=0,
+            goals_allowed_per_game_rank=0,
+            save_percentage_rank=0,
+            total_in_rank=total_in_rank,
+            first_game_id=None,
+            last_game_id=None,
+        )
+        session.add(goalie_stat)
+
+    session.commit()
 
 
 def aggregate_goalie_stats(
@@ -242,6 +305,11 @@ def aggregate_goalie_stats(
     assign_ranks(stats_dict, "shots_faced")
     assign_ranks(stats_dict, "goals_allowed_per_game", reverse_rank=True)
     assign_ranks(stats_dict, "save_percentage")
+
+    # Calculate and insert percentile marker records
+    insert_percentile_markers_goalie(
+        session, stats_dict, aggregation_id, total_in_rank, StatsModel
+    )
 
     # Debug output for specific human
     if debug_human_id:

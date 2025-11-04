@@ -37,8 +37,10 @@ from hockey_blast_common_lib.stats_models import (
 )
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.utils import (
+    calculate_percentile_value,
     get_all_division_ids_for_org,
     get_non_human_ids,
+    get_percentile_human,
     get_start_datetime,
 )
 
@@ -113,6 +115,105 @@ def calculate_current_point_streak(session, human_id, filter_condition):
     )
 
     return current_streak, avg_points_during_streak
+
+
+def insert_percentile_markers_skater(
+    session, stats_dict, aggregation_id, total_in_rank, StatsModel, aggregation_window
+):
+    """Insert percentile marker records for skater stats.
+
+    For each stat field, calculate the 25th, 50th, 75th, 90th, and 95th percentile values
+    and insert marker records with fake human IDs.
+    """
+    if not stats_dict:
+        return
+
+    # Define the stat fields we want to calculate percentiles for
+    # Each field has percentile calculated SEPARATELY
+    stat_fields = [
+        "games_played",
+        "games_participated",
+        "games_with_stats",
+        "goals",
+        "assists",
+        "points",
+        "penalties",
+        "gm_penalties",
+        "goals_per_game",
+        "assists_per_game",
+        "points_per_game",
+        "penalties_per_game",
+        "gm_penalties_per_game",
+    ]
+
+    # Add streak fields only for all-time stats
+    if aggregation_window is None:
+        stat_fields.extend(
+            ["current_point_streak", "current_point_streak_avg_points"]
+        )
+
+    # For each percentile (25, 50, 75, 90, 95)
+    percentiles = [25, 50, 75, 90, 95]
+
+    for percentile in percentiles:
+        # Get or create the percentile marker human
+        percentile_human_id = get_percentile_human(session, "Skater", percentile)
+
+        # Calculate percentile values for each stat field SEPARATELY
+        percentile_values = {}
+        for field in stat_fields:
+            # Extract all values for this field
+            values = [stat[field] for stat in stats_dict.values() if field in stat]
+            if values:
+                percentile_values[field] = calculate_percentile_value(values, percentile)
+            else:
+                percentile_values[field] = 0
+
+        # Create the stats record for this percentile marker
+        skater_stat = StatsModel(
+            aggregation_id=aggregation_id,
+            human_id=percentile_human_id,
+            games_played=int(percentile_values.get("games_played", 0)),
+            games_participated=int(percentile_values.get("games_participated", 0)),
+            games_participated_rank=0,  # Percentile markers don't have ranks
+            games_with_stats=int(percentile_values.get("games_with_stats", 0)),
+            games_with_stats_rank=0,
+            goals=int(percentile_values.get("goals", 0)),
+            assists=int(percentile_values.get("assists", 0)),
+            points=int(percentile_values.get("points", 0)),
+            penalties=int(percentile_values.get("penalties", 0)),
+            gm_penalties=int(percentile_values.get("gm_penalties", 0)),
+            goals_per_game=percentile_values.get("goals_per_game", 0.0),
+            points_per_game=percentile_values.get("points_per_game", 0.0),
+            assists_per_game=percentile_values.get("assists_per_game", 0.0),
+            penalties_per_game=percentile_values.get("penalties_per_game", 0.0),
+            gm_penalties_per_game=percentile_values.get("gm_penalties_per_game", 0.0),
+            games_played_rank=0,
+            goals_rank=0,
+            assists_rank=0,
+            points_rank=0,
+            penalties_rank=0,
+            gm_penalties_rank=0,
+            goals_per_game_rank=0,
+            points_per_game_rank=0,
+            assists_per_game_rank=0,
+            penalties_per_game_rank=0,
+            gm_penalties_per_game_rank=0,
+            total_in_rank=total_in_rank,
+            current_point_streak=int(
+                percentile_values.get("current_point_streak", 0)
+            ),
+            current_point_streak_rank=0,
+            current_point_streak_avg_points=percentile_values.get(
+                "current_point_streak_avg_points", 0.0
+            ),
+            current_point_streak_avg_points_rank=0,
+            first_game_id=None,  # Percentile markers don't have game references
+            last_game_id=None,
+        )
+        session.add(skater_stat)
+
+    session.commit()
 
 
 def aggregate_skater_stats(
@@ -560,6 +661,11 @@ def aggregate_skater_stats(
     ):  # Only assign current_point_streak ranks for all-time stats
         assign_ranks(stats_dict, "current_point_streak")
         assign_ranks(stats_dict, "current_point_streak_avg_points")
+
+    # Calculate and insert percentile marker records
+    insert_percentile_markers_skater(
+        session, stats_dict, aggregation_id, total_in_rank, StatsModel, aggregation_window
+    )
 
     # Debug output for specific human
     if debug_human_id:
