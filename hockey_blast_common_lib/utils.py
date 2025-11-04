@@ -95,6 +95,8 @@ def get_non_human_ids(session):
         ("Unassigned", None, None),
         ("Not", "Signed", "In"),
         ("Incognito", None, None),
+        ("Empty", None , "Net"),
+        ("Fake", "Stats", "Human"),
     ]
     return get_human_ids_by_names(session, not_human_names)
 
