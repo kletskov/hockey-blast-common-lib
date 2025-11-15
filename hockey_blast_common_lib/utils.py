@@ -269,7 +269,8 @@ def calculate_percentile_value(values, percentile):
     lower_value = sorted_values[lower_index]
     upper_value = sorted_values[upper_index]
 
-    return lower_value + fraction * (upper_value - lower_value)
+    # Convert Decimal to float to avoid type errors with database Decimal fields
+    return float(lower_value) + fraction * (float(upper_value) - float(lower_value))
 
 
 # TEST DB CONNECTION, PERMISSIONS...
