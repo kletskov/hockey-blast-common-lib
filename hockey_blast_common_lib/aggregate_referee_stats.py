@@ -5,6 +5,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+from datetime import datetime
 
 import sqlalchemy
 from sqlalchemy.sql import case, func
@@ -102,6 +103,9 @@ def insert_percentile_markers_referee(
 def aggregate_referee_stats(
     session, aggregation_type, aggregation_id, aggregation_window=None
 ):
+    # Capture start time for aggregation tracking
+    aggregation_start_time = datetime.utcnow()
+
     human_ids_to_filter = get_non_human_ids(session)
 
     if aggregation_type == "org":
@@ -375,11 +379,19 @@ def aggregate_referee_stats(
             total_in_rank=total_in_rank,
             first_game_id=stat["first_game_id"],
             last_game_id=stat["last_game_id"],
+            aggregation_started_at=aggregation_start_time,
         )
         session.add(referee_stat)
         # Commit in batches
         if i % batch_size == 0:
             session.commit()
+    session.commit()
+
+    # Update all records with completion timestamp
+    aggregation_end_time = datetime.utcnow()
+    session.query(StatsModel).filter(
+        StatsModel.aggregation_id == aggregation_id
+    ).update({StatsModel.aggregation_completed_at: aggregation_end_time})
     session.commit()
 
 

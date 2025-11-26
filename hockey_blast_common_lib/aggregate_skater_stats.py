@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 import sqlalchemy
+from datetime import datetime
 from sqlalchemy import and_, case, func
 from sqlalchemy.sql import case, func
 
@@ -223,6 +224,9 @@ def aggregate_skater_stats(
     debug_human_id=None,
     aggregation_window=None,
 ):
+    # Capture start time for aggregation tracking
+    aggregation_start_time = datetime.utcnow()
+
     human_ids_to_filter = get_non_human_ids(session)
 
     # Get the name of the aggregation, for debug purposes
@@ -754,11 +758,19 @@ def aggregate_skater_stats(
             ),
             first_game_id=stat["first_game_id"],
             last_game_id=stat["last_game_id"],
+            aggregation_started_at=aggregation_start_time,
         )
         session.add(skater_stat)
         # Commit in batches
         if i % batch_size == 0:
             session.commit()
+    session.commit()
+
+    # Update all records with completion timestamp
+    aggregation_end_time = datetime.utcnow()
+    session.query(StatsModel).filter(
+        StatsModel.aggregation_id == aggregation_id
+    ).update({StatsModel.aggregation_completed_at: aggregation_end_time})
     session.commit()
 
 

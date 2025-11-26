@@ -15,6 +15,8 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from datetime import datetime
+
 import sqlalchemy
 from sqlalchemy import func
 
@@ -62,6 +64,9 @@ def aggregate_team_goalie_stats(session, aggregation_type, aggregation_id):
         aggregation_type: "org" or "division"
         aggregation_id: ID of the organization or division
     """
+    # Capture start time for aggregation tracking
+    aggregation_start_time = datetime.utcnow()
+
     human_ids_to_filter = get_non_human_ids(session)
 
     # Determine aggregation details
@@ -221,10 +226,19 @@ def aggregate_team_goalie_stats(session, aggregation_type, aggregation_id):
                 shots_faced_rank=0,
                 goals_allowed_per_game_rank=0,
                 save_percentage_rank=0,
+                aggregation_started_at=aggregation_start_time,
             )
             session.add(goalie_stat)
 
     session.commit()
+
+    # Update all records with completion timestamp
+    aggregation_end_time = datetime.utcnow()
+    session.query(StatsModel).filter(
+        StatsModel.aggregation_id == aggregation_id
+    ).update({StatsModel.aggregation_completed_at: aggregation_end_time})
+    session.commit()
+
     progress.finish()
     print(f"✓ Team goalie stats aggregation complete for {aggregation_name}")
 

@@ -427,6 +427,7 @@ class Season(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     season_number = db.Column(db.Integer)
     season_name = db.Column(db.String(100))
+    base_season_name = db.Column(db.String(100))  # Static prefix for season name (e.g., "Silver Stick", "Over", etc.)
     start_date = db.Column(db.Date)
     end_date = db.Column(db.Date)
     league_number = db.Column(

@@ -4,7 +4,13 @@ from sqlalchemy.orm import synonym
 from hockey_blast_common_lib.models import db
 
 
-class BaseStatsHuman(db.Model):
+class AggregationTimestampMixin:
+    """Mixin to add aggregation timestamp tracking to all stats models."""
+    aggregation_started_at = db.Column(db.DateTime, nullable=True)
+    aggregation_completed_at = db.Column(db.DateTime, nullable=True)
+
+
+class BaseStatsHuman(AggregationTimestampMixin, db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), nullable=False)
@@ -92,7 +98,7 @@ class BaseStatsHuman(db.Model):
         )
 
 
-class BaseStatsSkater(db.Model):
+class BaseStatsSkater(AggregationTimestampMixin, db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), nullable=False)
@@ -193,7 +199,7 @@ class BaseStatsSkater(db.Model):
         )
 
 
-class BaseStatsGoalie(db.Model):
+class BaseStatsGoalie(AggregationTimestampMixin, db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), nullable=False)
@@ -261,7 +267,7 @@ class BaseStatsGoalie(db.Model):
         )
 
 
-class BaseStatsReferee(db.Model):
+class BaseStatsReferee(AggregationTimestampMixin, db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), nullable=False)
@@ -331,7 +337,7 @@ class BaseStatsReferee(db.Model):
         )
 
 
-class BaseStatsScorekeeper(db.Model):
+class BaseStatsScorekeeper(AggregationTimestampMixin, db.Model):
     __abstract__ = True
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), nullable=False)
@@ -1045,3 +1051,80 @@ class DivisionStatsGoalieTeam(BaseStatsGoalie):
             db.Index("idx_division_team_goalie_save_pct", "division_id", "save_percentage"),
             db.Index("idx_division_team_goalie_gaa", "division_id", "goals_allowed_per_game"),
         )
+
+
+# Per-Game Statistics Models (for RAG system)
+# These models store individual game performance data for each player/goalie
+# CRITICAL: Only non-zero rows are saved (games where player recorded stats)
+
+
+class GameStatsSkater(db.Model):
+    """Per-game skater statistics.
+
+    Stores individual game performance for skaters.
+    Only records where player had non-zero stats are saved.
+    Optimized for queries like "show me top N games by points for player X".
+    """
+    __tablename__ = "game_stats_skater"
+
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False, index=True)
+    human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), nullable=False, index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False, index=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=False, index=True)
+    level_id = db.Column(db.Integer, db.ForeignKey("levels.id"), nullable=False, index=True)
+
+    # Denormalized game metadata for sorting/filtering
+    game_date = db.Column(db.Date, nullable=False, index=True)
+    game_time = db.Column(db.Time, nullable=False)
+
+    # Performance stats
+    goals = db.Column(db.Integer, default=0, nullable=False)
+    assists = db.Column(db.Integer, default=0, nullable=False)
+    points = db.Column(db.Integer, default=0, nullable=False)
+    penalty_minutes = db.Column(db.Integer, default=0, nullable=False)
+
+    # Tracking
+    created_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+
+    __table_args__ = (
+        db.UniqueConstraint("game_id", "human_id", name="_game_human_uc_skater"),
+        db.Index("idx_game_stats_skater_human_date", "human_id", "game_date", postgresql_using="btree"),
+        db.Index("idx_game_stats_skater_human_team_date", "human_id", "team_id", "game_date", postgresql_using="btree"),
+    )
+
+
+class GameStatsGoalie(db.Model):
+    """Per-game goalie statistics.
+
+    Stores individual game performance for goalies.
+    Only records where goalie faced shots are saved.
+    Optimized for queries like "show me top N games by save% for goalie X".
+    """
+    __tablename__ = "game_stats_goalie"
+
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False, index=True)
+    human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), nullable=False, index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False, index=True)
+    org_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=False, index=True)
+    level_id = db.Column(db.Integer, db.ForeignKey("levels.id"), nullable=False, index=True)
+
+    # Denormalized game metadata for sorting/filtering
+    game_date = db.Column(db.Date, nullable=False, index=True)
+    game_time = db.Column(db.Time, nullable=False)
+
+    # Performance stats
+    goals_allowed = db.Column(db.Integer, default=0, nullable=False)
+    shots_faced = db.Column(db.Integer, default=0, nullable=False)
+    saves = db.Column(db.Integer, default=0, nullable=False)  # Computed: shots_faced - goals_allowed
+    save_percentage = db.Column(db.Float, default=0.0, nullable=False)  # Computed: saves / shots_faced
+
+    # Tracking
+    created_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+
+    __table_args__ = (
+        db.UniqueConstraint("game_id", "human_id", "team_id", name="_game_human_uc_goalie"),
+        db.Index("idx_game_stats_goalie_human_date", "human_id", "game_date", postgresql_using="btree"),
+        db.Index("idx_game_stats_goalie_human_team_date", "human_id", "team_id", "game_date", postgresql_using="btree"),
+    )

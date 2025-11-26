@@ -117,6 +117,9 @@ def aggregate_goalie_stats(
     debug_human_id=None,
     aggregation_window=None,
 ):
+    # Capture start time for aggregation tracking
+    aggregation_start_time = datetime.utcnow()
+
     human_ids_to_filter = get_non_human_ids(session)
 
     # Get the name of the aggregation, for debug purposes
@@ -364,11 +367,19 @@ def aggregate_goalie_stats(
             total_in_rank=total_in_rank,
             first_game_id=stat["first_game_id"],
             last_game_id=stat["last_game_id"],
+            aggregation_started_at=aggregation_start_time,
         )
         session.add(goalie_stat)
         # Commit in batches
         if i % batch_size == 0:
             session.commit()
+    session.commit()
+
+    # Update all records with completion timestamp
+    aggregation_end_time = datetime.utcnow()
+    session.query(StatsModel).filter(
+        StatsModel.aggregation_id == aggregation_id
+    ).update({StatsModel.aggregation_completed_at: aggregation_end_time})
     session.commit()
 
 

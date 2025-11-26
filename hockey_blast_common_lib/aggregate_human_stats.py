@@ -44,6 +44,9 @@ def aggregate_human_stats(
     human_id_filter=None,
     aggregation_window=None,
 ):
+    # Capture start time for aggregation tracking
+    aggregation_start_time = datetime.utcnow()
+
     human_ids_to_filter = get_non_human_ids(session)
 
     if aggregation_type == "org":
@@ -517,6 +520,7 @@ def aggregate_human_stats(
             last_game_id_referee=stat["last_game_id_referee"],
             first_game_id_scorekeeper=stat["first_game_id_scorekeeper"],
             last_game_id_scorekeeper=stat["last_game_id_scorekeeper"],
+            aggregation_started_at=aggregation_start_time,
         )
         session.add(human_stat)
         # Commit in batches
@@ -607,8 +611,16 @@ def aggregate_human_stats(
         last_game_id_referee=overall_stats["last_game_id_referee"],
         first_game_id_scorekeeper=overall_stats["first_game_id_scorekeeper"],
         last_game_id_scorekeeper=overall_stats["last_game_id_scorekeeper"],
+        aggregation_started_at=aggregation_start_time,
     )
     session.add(overall_human_stat)
+    session.commit()
+
+    # Update all records with completion timestamp
+    aggregation_end_time = datetime.utcnow()
+    session.query(StatsModel).filter(
+        StatsModel.aggregation_id == aggregation_id
+    ).update({StatsModel.aggregation_completed_at: aggregation_end_time})
     session.commit()
 
 
