@@ -53,7 +53,8 @@ class Game(db.Model):
     time = db.Column(db.Time)
     day_of_week = db.Column(db.Integer)  # 1 to 7 for Monday to Sunday
     period_length = db.Column(db.Integer)  # In minutes
-    location = db.Column(db.String(100))
+    location = db.Column(db.String(100))  # DEPRECATED: Use location_id instead
+    location_id = db.Column(db.Integer, db.ForeignKey("locations.id"), nullable=True)
     scorekeeper_id = db.Column(db.Integer, db.ForeignKey("humans.id"))
     referee_1_id = db.Column(db.Integer, db.ForeignKey("humans.id"))
     referee_2_id = db.Column(db.Integer, db.ForeignKey("humans.id"))
@@ -72,6 +73,7 @@ class Game(db.Model):
     home_ot_score = db.Column(db.Integer, default=0)
     visitor_ot_score = db.Column(db.Integer, default=0)
     game_type = db.Column(db.String(50))
+    live_time = db.Column(db.String(50), nullable=True)  # e.g., "Period 1, 1:10 left" for live games
     went_to_ot = db.Column(db.Boolean, default=False)
     home_period_1_shots = db.Column(db.Integer)
     home_period_2_shots = db.Column(db.Integer)
@@ -245,12 +247,24 @@ class Level(db.Model):
     org_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=False)
     skill_value = db.Column(db.Float)  # A number from 0 (NHL) to 100 (pedestrian)
     level_name = db.Column(db.String(100))
+    short_name = db.Column(db.String(50))  # Shortened display name (e.g., "D-7B-W" for "Adult Division 7B West")
     level_alternative_name = db.Column(db.String(100))
     is_seed = db.Column(db.Boolean, nullable=True, default=False)  # New field
     skill_propagation_sequence = db.Column(db.Integer, nullable=True, default=-1)
     __table_args__ = (
         db.UniqueConstraint("org_id", "level_name", name="_org_level_name_uc"),
     )
+
+
+class Location(db.Model):
+    __tablename__ = "locations"
+    id = db.Column(db.Integer, primary_key=True)
+    location_in_game_source = db.Column(db.String(200), nullable=False, unique=True)  # Raw string from Game.location, e.g., "San Jose Orange (N)"
+    location_name = db.Column(db.String(200), nullable=True)  # Optional: Facility name, e.g., "Sharks Ice At San Jose"
+    rink_name = db.Column(db.String(200), nullable=True)  # Optional: Specific rink, e.g., "Orange (N)"
+    address = db.Column(db.String(500), nullable=True)
+    google_maps_link = db.Column(db.String(500), nullable=True)
+    master_location_id = db.Column(db.Integer, db.ForeignKey("locations.id"), nullable=True)  # Points to the canonical location for this rink
 
 
 class LevelsMonthly(db.Model):

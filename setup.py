@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="hockey-blast-common-lib",  # The name of your package
-    version="0.1.66",
+    version="0.1.67",
     description="Common library for shared functionality and DB models",
     author="Pavel Kletskov",
     author_email="kletskov@gmail.com",
