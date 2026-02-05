@@ -164,6 +164,41 @@ class Human(db.Model):
     )
 
 
+class HumanGames(db.Model):
+    """
+    All game_ids for each human - authoritative list of games played.
+
+    Purpose:
+    - Fast O(1) lookup: "which games did this human play in?"
+    - Stats optimization: track if human has new games since last aggregation
+    - Analytics: quick access to player participation history
+
+    Maintenance:
+    - Populated initially from GameRoster (one-time backfill)
+    - Updated incrementally when games are loaded (indexer)
+    - Array only grows (games never removed)
+
+    Usage for stats:
+    - Compare array_length(game_ids, 1) with last_processed_games_count
+    - If increased → recalculate stats for this human
+    - If same → skip (no new games)
+    """
+    __tablename__ = "human_games"
+
+    human_id = db.Column(db.Integer, db.ForeignKey("humans.id"), primary_key=True)
+    game_ids = db.Column(db.ARRAY(db.Integer), nullable=False, default=[])  # All game_ids this human played
+    games_count = db.Column(db.Integer, nullable=False, default=0)  # Count for quick filtering
+    last_updated_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    last_processed_games_count = db.Column(db.Integer, nullable=False, default=0)  # Last count when stats were aggregated
+
+    # Indexes for performance
+    __table_args__ = (
+        db.Index('idx_human_games_games_count', 'games_count'),
+        db.Index('idx_human_games_last_updated', 'last_updated_at'),
+        db.Index('idx_human_games_needs_processing', 'games_count', 'last_processed_games_count'),
+    )
+
+
 class HumanAlias(db.Model):
     __tablename__ = "human_aliases"
     id = db.Column(db.Integer, primary_key=True)
