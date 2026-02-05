@@ -118,6 +118,118 @@ def calculate_current_point_streak(session, human_id, filter_condition):
     return current_streak, avg_points_during_streak
 
 
+def calculate_all_point_streaks_batch(session, human_ids, filter_condition):
+    """
+    Calculate point streaks for ALL players in one batch query.
+    This is MUCH faster than calling calculate_current_point_streak() for each player.
+
+    Args:
+        session: Database session
+        human_ids: List of all human_ids to calculate streaks for (e.g., 150 players in a division)
+        filter_condition: SQLAlchemy filter condition (org/division/level + time window)
+
+    Returns:
+        Dict[human_id] -> (streak_length, avg_points_per_game)
+
+    Performance:
+        - Old: N queries (one per player)
+        - New: 1 query for all players
+        - Speedup: ~150x for typical division
+    """
+    if not human_ids:
+        return {}
+
+    # Single query for ALL players at once
+    game_points = (
+        session.query(
+            GameRoster.human_id,
+            Game.id.label("game_id"),
+            Game.date,
+            Game.time,
+            func.sum(
+                case((Goal.goal_scorer_id == GameRoster.human_id, 1), else_=0)
+            ).label("goals"),
+            func.sum(
+                case(
+                    (
+                        (Goal.assist_1_id == GameRoster.human_id) |
+                        (Goal.assist_2_id == GameRoster.human_id),
+                        1
+                    ),
+                    else_=0
+                )
+            ).label("assists"),
+        )
+        .join(Game, GameRoster.game_id == Game.id)
+        .outerjoin(Goal, Game.id == Goal.game_id)
+        .filter(
+            GameRoster.human_id.in_(human_ids),  # ← ALL players at once!
+            ~GameRoster.role.ilike("g"),  # Exclude goalie games
+            filter_condition,
+            (Game.status.like("Final%")) | (Game.status == "NOEVENTS"),
+        )
+        .group_by(GameRoster.human_id, Game.id, Game.date, Game.time)
+        .order_by(
+            GameRoster.human_id,  # Group by player first
+            Game.date.desc(),      # Then most recent games first
+            Game.time.desc()
+        )
+        .all()
+    )
+
+    # Process results in Python to calculate streaks
+    streaks_by_human = {}
+    processed_humans = set()  # Track which humans we've finished processing
+    current_human = None
+    current_streak = 0
+    total_points = 0
+
+    for row in game_points:
+        # Skip if we've already processed this human (streak already broken)
+        if row.human_id in processed_humans:
+            continue
+
+        # New player?
+        if row.human_id != current_human:
+            # Save previous player's streak (if any)
+            if current_human is not None:
+                avg = total_points / current_streak if current_streak > 0 else 0.0
+                streaks_by_human[current_human] = (current_streak, avg)
+                processed_humans.add(current_human)
+
+            # Reset for new player
+            current_human = row.human_id
+            current_streak = 0
+            total_points = 0
+
+        # Calculate points for this game
+        points = (row.goals or 0) + (row.assists or 0)
+
+        if points > 0:
+            # Streak continues
+            current_streak += 1
+            total_points += points
+        else:
+            # Streak broken - save and mark as processed
+            avg = total_points / current_streak if current_streak > 0 else 0.0
+            streaks_by_human[current_human] = (current_streak, avg)
+            processed_humans.add(current_human)
+            # Reset current_human so we skip remaining games for this player
+            current_human = None
+
+    # Don't forget the last player (if still in a streak)
+    if current_human is not None and current_human not in processed_humans:
+        avg = total_points / current_streak if current_streak > 0 else 0.0
+        streaks_by_human[current_human] = (current_streak, avg)
+
+    # Ensure all requested human_ids have a result (even if 0,0)
+    for human_id in human_ids:
+        if human_id not in streaks_by_human:
+            streaks_by_human[human_id] = (0, 0.0)
+
+    return streaks_by_human
+
+
 def insert_percentile_markers_skater(
     session, stats_dict, aggregation_id, total_in_rank, StatsModel, aggregation_window
 ):
@@ -605,34 +717,26 @@ def aggregate_skater_stats(
                 stat["last_game_id"] = last_game.id if last_game else None
 
     # Calculate current point streak (only for all-time stats)
+    # OPTIMIZED: Use batch calculation instead of N+1 queries
     if aggregation_window is None:
         total_players = len(stats_dict)
-        # Show progress for All Orgs - this is the slowest part
-        if (
-            aggregation_type == "org"
-            and aggregation_id == ALL_ORGS_ID
-            and total_players > 1000
-        ):
-            progress = create_progress_tracker(
-                total_players, f"Calculating point streaks for {total_players} players"
-            )
-            for idx, (key, stat) in enumerate(stats_dict.items()):
-                agg_id, human_id = key
-                streak_length, avg_points = calculate_current_point_streak(
-                    session, human_id, filter_condition
-                )
-                stat["current_point_streak"] = streak_length
-                stat["current_point_streak_avg_points"] = avg_points
-                if (idx + 1) % 100 == 0 or (idx + 1) == total_players:
-                    progress.update(idx + 1)
-        else:
-            for key, stat in stats_dict.items():
-                agg_id, human_id = key
-                streak_length, avg_points = calculate_current_point_streak(
-                    session, human_id, filter_condition
-                )
-                stat["current_point_streak"] = streak_length
-                stat["current_point_streak_avg_points"] = avg_points
+
+        # Extract all human_ids from stats_dict
+        all_human_ids = [key[1] for key in stats_dict.keys()]
+
+        # Calculate all point streaks in ONE batch query (instead of N queries)
+        print(f"Calculating point streaks for {total_players} players using batch query...")
+        all_streaks = calculate_all_point_streaks_batch(
+            session, all_human_ids, filter_condition
+        )
+        print(f"✓ Point streaks calculated for {len(all_streaks)} players")
+
+        # Assign streak values to stats_dict
+        for key, stat in stats_dict.items():
+            agg_id, human_id = key
+            streak_length, avg_points = all_streaks.get(human_id, (0, 0.0))
+            stat["current_point_streak"] = streak_length
+            stat["current_point_streak_avg_points"] = avg_points
 
     # Calculate total_in_rank
     total_in_rank = len(stats_dict)
