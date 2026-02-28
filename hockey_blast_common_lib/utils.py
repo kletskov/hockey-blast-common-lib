@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.sql import func
 
-from hockey_blast_common_lib.models import Division, Human, Level, Organization
+from hockey_blast_common_lib.models import Division, Human, HumanAlias, Level, Organization
 
 
 def get_org_id_from_alias(session, org_alias):
@@ -66,8 +66,27 @@ def get_org_id_from_alias(session, org_alias):
 
 
 def get_human_ids_by_names(session, names):
+    """Get human IDs matching any of the given names.
+
+    Searches both Human table (primary names) and HumanAlias table (aliases).
+    This ensures we find humans even if they're registered under an alias.
+
+    Args:
+        session: Database session
+        names: List of (first_name, middle_name, last_name) tuples
+
+    Returns:
+        Set of human_ids matching any of the names
+    """
     human_ids = set()
+
     for first_name, middle_name, last_name in names:
+        # Normalize None to empty string for consistency
+        first_name = first_name or ""
+        middle_name = middle_name or ""
+        last_name = last_name or ""
+
+        # Search in Human table (primary names)
         query = session.query(Human.id)
         if first_name:
             query = query.filter(Human.first_name == first_name)
@@ -77,6 +96,18 @@ def get_human_ids_by_names(session, names):
             query = query.filter(Human.last_name == last_name)
         results = query.all()
         human_ids.update([result.id for result in results])
+
+        # Search in HumanAlias table (aliases)
+        alias_query = session.query(HumanAlias.human_id)
+        if first_name:
+            alias_query = alias_query.filter(HumanAlias.first_name == first_name)
+        if middle_name:
+            alias_query = alias_query.filter(HumanAlias.middle_name == middle_name)
+        if last_name:
+            alias_query = alias_query.filter(HumanAlias.last_name == last_name)
+        alias_results = alias_query.all()
+        human_ids.update([result.human_id for result in alias_results])
+
     return human_ids
 
 

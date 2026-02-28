@@ -203,10 +203,12 @@ class HumanAlias(db.Model):
     __tablename__ = "human_aliases"
     id = db.Column(db.Integer, primary_key=True)
     human_id = db.Column(db.Integer, db.ForeignKey("humans.id"))
-    first_name = db.Column(db.String(100))
-    middle_name = db.Column(db.String(100))
-    last_name = db.Column(db.String(100))
-    suffix = db.Column(db.String(100))
+    # All name components declared non-nullable to match Human table schema
+    # Use empty string '' for absence of middle_name or suffix, never NULL
+    first_name = db.Column(db.String(100), nullable=False, default="")
+    middle_name = db.Column(db.String(100), nullable=False, default="")
+    last_name = db.Column(db.String(100), nullable=False, default="")
+    suffix = db.Column(db.String(100), nullable=False, default="")
     first_date = db.Column(db.Date)
     last_date = db.Column(db.Date)
     __table_args__ = (
