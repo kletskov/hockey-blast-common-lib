@@ -6,8 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 import sqlalchemy
-from datetime import datetime
-from sqlalchemy import and_, case, func
+from datetime import date, datetime, timedelta
+from sqlalchemy import and_, case, func, text
 from sqlalchemy.sql import case, func
 
 from hockey_blast_common_lib.db_connection import create_session
@@ -17,6 +17,7 @@ from hockey_blast_common_lib.models import (
     GameRoster,
     Goal,
     Human,
+    HumanGames,
     Level,
     Organization,
     Penalty,
@@ -25,6 +26,7 @@ from hockey_blast_common_lib.options import (
     MIN_GAMES_FOR_DIVISION_STATS,
     MIN_GAMES_FOR_LEVEL_STATS,
     MIN_GAMES_FOR_ORG_STATS,
+    SKIP_STATS_INACTIVE_DIVISION_MONTHS,
 )
 from hockey_blast_common_lib.progress_utils import create_progress_tracker
 from hockey_blast_common_lib.stats_models import (
@@ -50,6 +52,32 @@ FINAL_STATUS = "Final"
 FINAL_SO_STATUS = "Final(SO)"
 FORFEIT_STATUS = "FORFEIT"
 NOEVENTS_STATUS = "NOEVENTS"
+
+
+def get_changed_human_ids(session):
+    """Return set of human_ids where games_count > last_processed_games_count."""
+    rows = (
+        session.query(HumanGames.human_id)
+        .filter(HumanGames.games_count > HumanGames.last_processed_games_count)
+        .all()
+    )
+    return set(row[0] for row in rows)
+
+
+def mark_humans_processed(session, human_ids):
+    """Set last_processed_games_count = games_count for given human_ids."""
+    if not human_ids:
+        return
+    session.execute(
+        text("""
+            UPDATE human_games
+            SET last_processed_games_count = games_count
+            WHERE human_id = ANY(:ids)
+              AND games_count > last_processed_games_count
+        """),
+        {"ids": list(human_ids)},
+    )
+    session.commit()
 
 
 def calculate_current_point_streak(session, human_id, filter_condition):
@@ -335,6 +363,7 @@ def aggregate_skater_stats(
     aggregation_id,
     debug_human_id=None,
     aggregation_window=None,
+    changed_human_ids=None,
 ):
     # Capture start time for aggregation tracking
     aggregation_start_time = datetime.utcnow()
@@ -386,6 +415,21 @@ def aggregate_skater_stats(
             StatsModel = DivisionStatsSkater
         min_games = MIN_GAMES_FOR_DIVISION_STATS
         filter_condition = Game.division_id == aggregation_id
+
+        # Skip inactive divisions: if last game is older than configured threshold, skip all windows
+        if SKIP_STATS_INACTIVE_DIVISION_MONTHS > 0:
+            last_game_date = (
+                session.query(func.max(Game.date))
+                .filter(
+                    Game.division_id == aggregation_id,
+                    (Game.status.like("Final%")) | (Game.status == "NOEVENTS"),
+                )
+                .scalar()
+            )
+            if last_game_date is not None:
+                cutoff = date.today() - timedelta(days=SKIP_STATS_INACTIVE_DIVISION_MONTHS * 30)
+                if last_game_date < cutoff:
+                    return
     elif aggregation_type == "level":
         StatsModel = LevelStatsSkater
         min_games = MIN_GAMES_FOR_LEVEL_STATS
@@ -403,6 +447,21 @@ def aggregate_skater_stats(
         # filter_condition = filter_condition & level_window_filter
     else:
         raise ValueError("Invalid aggregation type")
+
+    # Incremental skip: if changed_human_ids provided, check if this aggregation has any
+    if changed_human_ids is not None and aggregation_window is None:
+        agg_human_ids = set(
+            row[0] for row in
+            session.query(GameRoster.human_id)
+            .join(Game, GameRoster.game_id == Game.id)
+            .filter(filter_condition)
+            .filter(~GameRoster.role.ilike("g"))
+            .filter((Game.status.like("Final%")) | (Game.status == "NOEVENTS"))
+            .distinct()
+            .all()
+        )
+        if not changed_human_ids.intersection(agg_human_ids):
+            return  # Nothing changed in this aggregation, skip
 
     # Delete existing items from the stats table
     session.query(StatsModel).filter(
@@ -882,6 +941,10 @@ def run_aggregate_skater_stats():
     session = create_session("boss")
     human_id_to_debug = None
 
+    # Pre-fetch changed humans once (single query)
+    changed_human_ids = get_changed_human_ids(session)
+    print(f"Incremental: {len(changed_human_ids)} humans with new games to process", flush=True)
+
     # Get all org_id present in the Organization table
     org_ids = session.query(Organization.id).all()
     org_ids = [org_id[0] for org_id in org_ids]
@@ -907,6 +970,7 @@ def run_aggregate_skater_stats():
                     aggregation_type="division",
                     aggregation_id=division_id,
                     debug_human_id=human_id_to_debug,
+                    changed_human_ids=changed_human_ids,
                 )
                 aggregate_skater_stats(
                     session,
@@ -931,6 +995,7 @@ def run_aggregate_skater_stats():
                     aggregation_type="division",
                     aggregation_id=division_id,
                     debug_human_id=human_id_to_debug,
+                    changed_human_ids=changed_human_ids,
                 )
                 aggregate_skater_stats(
                     session,
@@ -957,6 +1022,7 @@ def run_aggregate_skater_stats():
                 aggregation_type="org",
                 aggregation_id=org_id,
                 debug_human_id=human_id_to_debug,
+                changed_human_ids=changed_human_ids,
             )
             org_progress.update(1)
             aggregate_skater_stats(
@@ -981,6 +1047,7 @@ def run_aggregate_skater_stats():
                 aggregation_type="org",
                 aggregation_id=org_id,
                 debug_human_id=human_id_to_debug,
+                changed_human_ids=changed_human_ids,
             )
             aggregate_skater_stats(
                 session,
@@ -1012,6 +1079,7 @@ def run_aggregate_skater_stats():
                 aggregation_type="level",
                 aggregation_id=level_id,
                 debug_human_id=human_id_to_debug,
+                changed_human_ids=changed_human_ids,
             )
             level_progress.update(i + 1)
     else:
@@ -1022,7 +1090,12 @@ def run_aggregate_skater_stats():
                 aggregation_type="level",
                 aggregation_id=level_id,
                 debug_human_id=human_id_to_debug,
+                changed_human_ids=changed_human_ids,
             )
+
+    # After ALL aggregations complete, mark humans as processed
+    mark_humans_processed(session, changed_human_ids)
+    print(f"Marked {len(changed_human_ids)} humans as processed", flush=True)
 
 
 if __name__ == "__main__":

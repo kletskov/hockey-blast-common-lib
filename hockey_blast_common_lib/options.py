@@ -8,6 +8,11 @@ MIN_GAMES_FOR_ORG_STATS = 1
 MIN_GAMES_FOR_DIVISION_STATS = 1
 MIN_GAMES_FOR_LEVEL_STATS = 1
 
+# Skip recalculating stats for divisions whose last game is older than this many months.
+# Divisions inactive this long are finished seasons that never change.
+# Set to 0 to disable and always recalculate all divisions.
+SKIP_STATS_INACTIVE_DIVISION_MONTHS = 6
+
 orgs = {"caha", "sharksice", "tvice"}
 
 

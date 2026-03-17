@@ -76,17 +76,6 @@ def populate_human_games_fresh(session):
 
 
 if __name__ == "__main__":
-    # Step 0: Populate human_games table fresh from GameRoster
-    # This ensures it's always in sync before stats aggregation
-    session = create_session("boss")
-    try:
-        populate_human_games_fresh(session)
-    except Exception as e:
-        print(f"ERROR: Failed to populate human_games: {e}", flush=True)
-        # Continue anyway - stats will still work, just slower
-    finally:
-        session.close()
-
     print("Running aggregate_skater_stats...", flush=True)
     run_aggregate_skater_stats()
     print("Finished running aggregate_skater_stats\n")
