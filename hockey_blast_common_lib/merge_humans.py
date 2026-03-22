@@ -318,6 +318,13 @@ def merge_humans(session, primary_human_id: int, secondary_human_id: int) -> Non
     session.query(HumanGames).filter_by(human_id=secondary_human_id).delete()
     session.query(HumanEmbedding).filter_by(human_id=secondary_human_id).delete()
 
+    # Force re-aggregation of primary human on next aggregation run.
+    # By zeroing last_processed_games_count, the incremental aggregator will
+    # detect games_count > last_processed_games_count and reprocess fully.
+    primary_hg = session.query(HumanGames).filter_by(human_id=primary_human_id).first()
+    if primary_hg:
+        primary_hg.last_processed_games_count = 0
+
     session.commit()
 
     # ── Delete the secondary human record (and any remaining aliases) ─────────
