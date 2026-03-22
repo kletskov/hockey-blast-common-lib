@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # Load environment variables from .env file in the root directory of THE PROJECT (not this library)
-load_dotenv()
+load_dotenv(override=False)
 
 # Database connection parameters per organization
 DB_PARAMS = {
