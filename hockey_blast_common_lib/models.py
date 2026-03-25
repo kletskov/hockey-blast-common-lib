@@ -86,6 +86,9 @@ class Game(db.Model):
     visitor_ot_shots = db.Column(db.Integer, default=0)
     visitor_so_shots = db.Column(db.Integer, default=0)
     org_id = db.Column(db.Integer, db.ForeignKey("organizations.id"), nullable=False)
+    last_fetch_error = db.Column(db.String(50), nullable=True)  # e.g., "connection_reset", "http_403", "timeout"
+    last_fetch_error_detail = db.Column(db.String(255), nullable=True)  # Truncated error message
+    last_fetch_error_time = db.Column(db.DateTime, nullable=True)  # When the error occurred
     __table_args__ = (
         db.UniqueConstraint("org_id", "game_number", name="_org_game_number_uc"),
     )
