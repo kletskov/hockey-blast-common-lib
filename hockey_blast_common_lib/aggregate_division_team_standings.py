@@ -22,7 +22,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import func, case, text
 
-from hockey_blast_common_lib.db_connection import create_session
+from hockey_blast_common_lib.db_connection import create_session_boss
 from hockey_blast_common_lib.models import Division, Game, Team
 from hockey_blast_common_lib.stats_models import DivisionTeamStandings
 
@@ -164,7 +164,7 @@ def run_aggregate_division_team_standings():
     print("=" * 80, flush=True)
 
     start = datetime.now()
-    session = create_session()
+    session = create_session_boss()
 
     try:
         # Find all divisions that have at least one completed game
