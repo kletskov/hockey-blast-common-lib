@@ -15,6 +15,9 @@ from hockey_blast_common_lib.aggregate_skater_stats import run_aggregate_skater_
 from hockey_blast_common_lib.aggregate_team_goalie_stats import (
     run_aggregate_team_goalie_stats,
 )
+from hockey_blast_common_lib.aggregate_division_team_standings import (
+    run_aggregate_division_team_standings,
+)
 from hockey_blast_common_lib.aggregate_team_skater_stats import (
     run_aggregate_team_skater_stats,
 )
@@ -103,3 +106,7 @@ if __name__ == "__main__":
     print("Running aggregate_team_goalie_stats...", flush=True)
     run_aggregate_team_goalie_stats()
     print("Finished running aggregate_team_goalie_stats\n")
+
+    print("Running aggregate_division_team_standings...", flush=True)
+    run_aggregate_division_team_standings()
+    print("Finished running aggregate_division_team_standings\n")
