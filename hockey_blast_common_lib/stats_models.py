@@ -1128,3 +1128,51 @@ class GameStatsGoalie(db.Model):
         db.Index("idx_game_stats_goalie_human_date", "human_id", "game_date", postgresql_using="btree"),
         db.Index("idx_game_stats_goalie_human_team_date", "human_id", "team_id", "game_date", postgresql_using="btree"),
     )
+
+
+class DivisionTeamStandings(db.Model):
+    """Team standings per division (wins, losses, ties, points, goals, champion flag).
+
+    Aggregated nightly from completed games. One row per (division_id, team_id).
+    Supports queries like:
+    - "which team won most games in Adult 4B this season?"
+    - "show me Good Guys standings history across all seasons"
+    - "who was champion of division X?"
+    """
+    __tablename__ = "division_team_standings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    division_id = db.Column(db.Integer, db.ForeignKey("divisions.id"), nullable=False, index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False, index=True)
+
+    # Record
+    games_played = db.Column(db.Integer, default=0, nullable=False)
+    wins = db.Column(db.Integer, default=0, nullable=False)
+    losses = db.Column(db.Integer, default=0, nullable=False)
+    ties = db.Column(db.Integer, default=0, nullable=False)
+    ot_wins = db.Column(db.Integer, default=0, nullable=False)   # Won in OT/SO
+    ot_losses = db.Column(db.Integer, default=0, nullable=False) # Lost in OT/SO
+
+    # Standings points (2 for win, 1 for OT loss/tie, 0 for loss — configurable)
+    points = db.Column(db.Integer, default=0, nullable=False)
+
+    # Goals
+    goals_for = db.Column(db.Integer, default=0, nullable=False)
+    goals_against = db.Column(db.Integer, default=0, nullable=False)
+    goal_differential = db.Column(db.Integer, default=0, nullable=False)
+
+    # Rank within division (1 = first place)
+    rank = db.Column(db.Integer, nullable=True)
+
+    # Champion flag
+    is_champion = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Tracking
+    updated_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp(),
+                           onupdate=db.func.current_timestamp())
+
+    __table_args__ = (
+        db.UniqueConstraint("division_id", "team_id", name="uq_division_team_standings"),
+        db.Index("idx_div_team_standings_div", "division_id"),
+        db.Index("idx_div_team_standings_team", "team_id"),
+    )
