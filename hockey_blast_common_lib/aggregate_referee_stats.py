@@ -150,13 +150,8 @@ def aggregate_referee_stats(
     else:
         raise ValueError("Invalid aggregation type")
 
-    # Delete existing items from the stats table
-    session.query(StatsModel).filter(
-        StatsModel.aggregation_id == aggregation_id
-    ).delete()
-    session.commit()
-
-    # Apply aggregation window filter
+    # Apply aggregation window filter BEFORE deleting, so we don't wipe stats
+    # if the window turns out to be stale (no recent games).
     if aggregation_window:
         last_game_datetime_str = (
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
@@ -170,17 +165,21 @@ def aggregate_referee_stats(
             ).between(start_datetime, last_game_datetime_str)
             filter_condition = filter_condition & game_window_filter
         else:
-            # print(f"Warning: No valid start datetime for aggregation window '{aggregation_window}' for {aggregation_name}. No games will be included.")
+            # No recent games — keep existing stats so the section isn't empty.
             return
+
+    # Delete existing items from the stats table (only after confirming we have data to replace)
+    session.query(StatsModel).filter(
+        StatsModel.aggregation_id == aggregation_id
+    ).delete()
+    session.commit()
 
     filter_condition = filter_condition & (Division.id == Game.division_id)
     # Aggregate games reffed for each referee
     # games_participated: Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
     # games_with_stats: Count only FINAL, FINAL_SO (for per-game averages)
     # Filter by game status upfront for performance
-    status_filter = Game.status.in_(
-        [FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS]
-    )
+    status_filter = (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
 
     games_reffed_stats = (
         session.query(

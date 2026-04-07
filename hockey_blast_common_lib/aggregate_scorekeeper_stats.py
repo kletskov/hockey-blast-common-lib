@@ -174,13 +174,8 @@ def aggregate_scorekeeper_stats(
     else:
         raise ValueError("Invalid aggregation type")
 
-    # Delete existing items from the stats table
-    session.query(StatsModel).filter(
-        StatsModel.aggregation_id == aggregation_id
-    ).delete()
-    session.commit()
-
-    # Apply aggregation window filter
+    # Apply aggregation window filter BEFORE deleting, so we don't wipe stats
+    # if the window turns out to be stale (no recent games).
     if aggregation_window:
         last_game_datetime_str = (
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
@@ -194,7 +189,14 @@ def aggregate_scorekeeper_stats(
             ).between(start_datetime, last_game_datetime_str)
             filter_condition = filter_condition & game_window_filter
         else:
+            # No recent games — keep existing stats so the section isn't empty.
             return
+
+    # Delete existing items from the stats table (only after confirming we have data to replace)
+    session.query(StatsModel).filter(
+        StatsModel.aggregation_id == aggregation_id
+    ).delete()
+    session.commit()
 
     # Aggregate scorekeeper quality data for each human
     # games_participated: Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
@@ -232,9 +234,7 @@ def aggregate_scorekeeper_stats(
         )
         .join(Game, Game.id == ScorekeeperSaveQuality.game_id)
         .filter(
-            Game.status.in_(
-                [FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS]
-            )
+            (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
         )
     )
 

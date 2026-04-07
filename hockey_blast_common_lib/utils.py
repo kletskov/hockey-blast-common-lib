@@ -210,8 +210,17 @@ def get_start_datetime(last_game_datetime_str, aggregation_window):
             # Check if the last game datetime is over 24 hours from now
             if datetime.now() - last_game_datetime > timedelta(hours=24):
                 return None
-            # From 10AM till midnight, 14 hours to avoid last day games
-            return last_game_datetime - timedelta(hours=14)
+            # The "hockey day" starts at 5 AM PST (game times in DB are already PST).
+            # Games before 5 AM are considered part of the previous day.
+            if last_game_datetime.hour < 5:
+                day_start = (last_game_datetime - timedelta(days=1)).replace(
+                    hour=5, minute=0, second=0, microsecond=0
+                )
+            else:
+                day_start = last_game_datetime.replace(
+                    hour=5, minute=0, second=0, microsecond=0
+                )
+            return day_start
     return None
 
 

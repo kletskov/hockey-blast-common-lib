@@ -113,7 +113,7 @@ def aggregate_game_stats_goalie(session, mode="full", human_id=None):
         print(f"Full mode: Deleted {delete_count} existing records\n")
 
     # Build game filter for eligible games
-    game_filter = Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS])
+    game_filter = Game.status.like("Final%")
     if mode == "append" and start_datetime:
         game_filter = and_(
             game_filter,

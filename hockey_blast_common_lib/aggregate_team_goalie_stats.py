@@ -135,7 +135,7 @@ def aggregate_team_goalie_stats(session, aggregation_type, aggregation_id):
                 GameRoster.team_id == team_id,  # KEY: Filter by team
                 GameRoster.role.ilike("g"),  # Only goalies
                 GameRoster.human_id.notin_(human_ids_to_filter),
-                Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS]),
+                (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS"),
                 filter_condition,  # org_id or division_id filter
             )
             .group_by(GameRoster.human_id)
@@ -174,7 +174,7 @@ def aggregate_team_goalie_stats(session, aggregation_type, aggregation_id):
                 GameRoster.team_id == team_id,  # KEY: Filter by team
                 GameRoster.role.ilike("g"),
                 GameRoster.human_id.in_(stats_dict.keys()),
-                Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS]),
+                Game.status.like("Final%"),
                 filter_condition,
             )
             .group_by(GameRoster.human_id)
