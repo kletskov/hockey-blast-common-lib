@@ -157,16 +157,14 @@ def aggregate_goalie_stats(
     elif aggregation_type == "level":
         StatsModel = LevelStatsGoalie
         min_games = MIN_GAMES_FOR_LEVEL_STATS
-        filter_condition = Division.level_id == aggregation_id
-        # Add filter to only include games for the last 5 years
-        five_years_ago = datetime.now() - timedelta(days=5 * 365)
-        level_window_filter = (
-            func.cast(
-                func.concat(Game.date, " ", Game.time), sqlalchemy.types.TIMESTAMP
-            )
-            >= five_years_ago
+        # Get division IDs for this level to avoid cartesian product (matches skater approach)
+        division_ids = (
+            session.query(Division.id).filter(Division.level_id == aggregation_id).all()
         )
-        filter_condition = filter_condition & level_window_filter
+        division_ids = [div_id[0] for div_id in division_ids]
+        if not division_ids:
+            return  # No divisions for this level
+        filter_condition = Game.division_id.in_(division_ids)
     else:
         raise ValueError("Invalid aggregation type")
 
@@ -215,9 +213,13 @@ def aggregate_goalie_stats(
         .filter(
             (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
         )
-        .join(Division, Game.division_id == Division.id)
-        .filter(filter_condition)
     )
+
+    # Only join Division if not level aggregation (since we filter on Game.division_id directly for levels)
+    if aggregation_type != "level":
+        query = query.join(Division, Game.division_id == Division.id)
+
+    query = query.filter(filter_condition)
 
     # Filter for specific human_id if provided
     if debug_human_id:
