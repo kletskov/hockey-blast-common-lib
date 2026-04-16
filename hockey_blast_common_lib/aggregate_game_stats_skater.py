@@ -239,44 +239,48 @@ def aggregate_game_stats_skater(session, mode="full", human_id=None):
 
     print(f"Filtered: {len(nonzero_dict)} non-zero records (from {len(roster_dict)} total)\n")
 
+    # DISABLED: Bulk insert of 1.2M+ skater records - should only update current game participants
+    # TODO: Re-enable with incremental logic that only processes games from the last run
+    #
     # Insert records in batches with progress tracking
-    batch_size = 1000
-    total_records = len(nonzero_dict)
-
-    if total_records == 0:
-        print("No non-zero records to insert.\n")
-    else:
-        progress = create_progress_tracker(total_records, "Inserting per-game skater stats")
-
-        records_to_insert = []
-        for i, (key, stats) in enumerate(nonzero_dict.items(), 1):
-            game_id, human_id = key
-
-            record = GameStatsSkater(
-                game_id=game_id,
-                human_id=human_id,
-                team_id=stats["team_id"],
-                org_id=stats["org_id"],
-                level_id=stats["level_id"],
-                game_date=stats["game_date"],
-                game_time=stats["game_time"],
-                goals=stats["goals"],
-                assists=stats["assists"],
-                points=stats["points"],
-                penalty_minutes=stats["penalty_minutes"],
-                created_at=datetime.utcnow(),
-            )
-
-            records_to_insert.append(record)
-
-            # Commit in batches
-            if i % batch_size == 0 or i == total_records:
-                session.bulk_save_objects(records_to_insert)
-                session.commit()
-                records_to_insert = []
-                progress.update(i)
-
-        print("\nInsert complete.\n")
+    # batch_size = 1000
+    # total_records = len(nonzero_dict)
+    #
+    # if total_records == 0:
+    #     print("No non-zero records to insert.\n")
+    # else:
+    #     progress = create_progress_tracker(total_records, "Inserting per-game skater stats")
+    #
+    #     records_to_insert = []
+    #     for i, (key, stats) in enumerate(nonzero_dict.items(), 1):
+    #         game_id, human_id = key
+    #
+    #         record = GameStatsSkater(
+    #             game_id=game_id,
+    #             human_id=human_id,
+    #             team_id=stats["team_id"],
+    #             org_id=stats["org_id"],
+    #             level_id=stats["level_id"],
+    #             game_date=stats["game_date"],
+    #             game_time=stats["game_time"],
+    #             goals=stats["goals"],
+    #             assists=stats["assists"],
+    #             points=stats["points"],
+    #             penalty_minutes=stats["penalty_minutes"],
+    #             created_at=datetime.utcnow(),
+    #         )
+    #
+    #         records_to_insert.append(record)
+    #
+    #         # Commit in batches
+    #         if i % batch_size == 0 or i == total_records:
+    #             session.bulk_save_objects(records_to_insert)
+    #             session.commit()
+    #             records_to_insert = []
+    #             progress.update(i)
+    #
+    #     print("\nInsert complete.\n")
+    print(f"SKIPPED: Bulk insert of {len(nonzero_dict)} records disabled - should only update current game participants\n")
 
     # Update or create sentinel record with max game timestamp (skip if filtering by human_id)
     if not human_id:

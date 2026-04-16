@@ -181,48 +181,52 @@ def aggregate_game_stats_goalie(session, mode="full", human_id=None):
 
     print(f"Filtered: {len(nonzero_records)} non-zero records (from {len(goalie_records)} total)\n")
 
+    # DISABLED: Bulk insert of goalie records - should only update current game participants
+    # TODO: Re-enable with incremental logic that only processes games from the last run
+    #
     # Insert records in batches with progress tracking
-    batch_size = 1000
-    total_records = len(nonzero_records)
-
-    if total_records == 0:
-        print("No non-zero records to insert.\n")
-    else:
-        progress = create_progress_tracker(total_records, "Inserting per-game goalie stats")
-
-        records_to_insert = []
-        for i, record in enumerate(nonzero_records, 1):
-            # Calculate save percentage
-            if record.shots_faced > 0:
-                save_percentage = (record.shots_faced - record.goals_allowed) / record.shots_faced
-            else:
-                save_percentage = 0.0
-
-            game_stats_record = GameStatsGoalie(
-                game_id=record.game_id,
-                human_id=record.human_id,
-                team_id=record.team_id,
-                org_id=record.org_id,
-                level_id=record.level_id,
-                game_date=record.game_date,
-                game_time=record.game_time,
-                goals_allowed=record.goals_allowed,
-                shots_faced=record.shots_faced,
-                saves=record.saves,
-                save_percentage=save_percentage,
-                created_at=datetime.utcnow(),
-            )
-
-            records_to_insert.append(game_stats_record)
-
-            # Commit in batches
-            if i % batch_size == 0 or i == total_records:
-                session.bulk_save_objects(records_to_insert)
-                session.commit()
-                records_to_insert = []
-                progress.update(i)
-
-        print("\nInsert complete.\n")
+    # batch_size = 1000
+    # total_records = len(nonzero_records)
+    #
+    # if total_records == 0:
+    #     print("No non-zero records to insert.\n")
+    # else:
+    #     progress = create_progress_tracker(total_records, "Inserting per-game goalie stats")
+    #
+    #     records_to_insert = []
+    #     for i, record in enumerate(nonzero_records, 1):
+    #         # Calculate save percentage
+    #         if record.shots_faced > 0:
+    #             save_percentage = (record.shots_faced - record.goals_allowed) / record.shots_faced
+    #         else:
+    #             save_percentage = 0.0
+    #
+    #         game_stats_record = GameStatsGoalie(
+    #             game_id=record.game_id,
+    #             human_id=record.human_id,
+    #             team_id=record.team_id,
+    #             org_id=record.org_id,
+    #             level_id=record.level_id,
+    #             game_date=record.game_date,
+    #             game_time=record.game_time,
+    #             goals_allowed=record.goals_allowed,
+    #             shots_faced=record.shots_faced,
+    #             saves=record.saves,
+    #             save_percentage=save_percentage,
+    #             created_at=datetime.utcnow(),
+    #         )
+    #
+    #         records_to_insert.append(game_stats_record)
+    #
+    #         # Commit in batches
+    #         if i % batch_size == 0 or i == total_records:
+    #             session.bulk_save_objects(records_to_insert)
+    #             session.commit()
+    #             records_to_insert = []
+    #             progress.update(i)
+    #
+    #     print("\nInsert complete.\n")
+    print(f"SKIPPED: Bulk insert of {len(nonzero_records)} goalie records disabled - should only update current game participants\n")
 
     print(f"\n{'='*80}")
     print("Per-game goalie statistics aggregation complete")
