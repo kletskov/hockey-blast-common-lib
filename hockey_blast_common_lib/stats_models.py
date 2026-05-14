@@ -221,6 +221,17 @@ class BaseStatsGoalie(AggregationTimestampMixin, db.Model):
     shots_faced_rank = db.Column(db.Integer, default=0)
     save_percentage = db.Column(db.Float, default=0.0)
     save_percentage_rank = db.Column(db.Integer, default=0)
+    wins = db.Column(db.Integer, default=0)
+    wins_rank = db.Column(db.Integer, default=0)
+    losses = db.Column(db.Integer, default=0)
+    losses_rank = db.Column(db.Integer, default=0)
+    ties = db.Column(db.Integer, default=0)
+    ot_losses = db.Column(db.Integer, default=0)
+    ot_losses_rank = db.Column(db.Integer, default=0)
+    shutouts = db.Column(db.Integer, default=0)
+    shutouts_rank = db.Column(db.Integer, default=0)
+    win_percentage = db.Column(db.Float, default=0.0)
+    win_percentage_rank = db.Column(db.Integer, default=0)
     total_in_rank = db.Column(db.Integer, default=0)
     first_game_id = db.Column(db.Integer, db.ForeignKey("games.id"))
     last_game_id = db.Column(db.Integer, db.ForeignKey("games.id"))
@@ -257,6 +268,21 @@ class BaseStatsGoalie(AggregationTimestampMixin, db.Model):
                 f"idx_{cls.aggregation_type}_goals_allowed1",
                 cls.get_aggregation_column(),
                 "goals_allowed",
+            ),
+            db.Index(
+                f"idx_{cls.aggregation_type}_wins_goalie1",
+                cls.get_aggregation_column(),
+                "wins",
+            ),
+            db.Index(
+                f"idx_{cls.aggregation_type}_shutouts_goalie1",
+                cls.get_aggregation_column(),
+                "shutouts",
+            ),
+            db.Index(
+                f"idx_{cls.aggregation_type}_win_percentage_goalie1",
+                cls.get_aggregation_column(),
+                "win_percentage",
             ),
         )
 
@@ -1119,6 +1145,10 @@ class GameStatsGoalie(db.Model):
     shots_faced = db.Column(db.Integer, default=0, nullable=False)
     saves = db.Column(db.Integer, default=0, nullable=False)  # Computed: shots_faced - goals_allowed
     save_percentage = db.Column(db.Float, default=0.0, nullable=False)  # Computed: saves / shots_faced
+
+    # Game result
+    result = db.Column(db.String(3), nullable=True)  # W, L, T, OTL
+    shutout = db.Column(db.Boolean, default=False, nullable=False)  # goals_allowed == 0
 
     # Tracking
     created_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())

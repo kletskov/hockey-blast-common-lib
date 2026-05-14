@@ -69,6 +69,11 @@ def insert_percentile_markers_goalie(
         "shots_faced",
         "goals_allowed_per_game",
         "save_percentage",
+        "wins",
+        "losses",
+        "ot_losses",
+        "shutouts",
+        "win_percentage",
     ]
 
     percentiles = [25, 50, 75, 90, 95]
@@ -96,6 +101,17 @@ def insert_percentile_markers_goalie(
             shots_faced=int(percentile_values.get("shots_faced", 0)),
             goals_allowed_per_game=percentile_values.get("goals_allowed_per_game", 0.0),
             save_percentage=percentile_values.get("save_percentage", 0.0),
+            wins=int(percentile_values.get("wins", 0)),
+            wins_rank=0,
+            losses=int(percentile_values.get("losses", 0)),
+            losses_rank=0,
+            ties=int(percentile_values.get("ties", 0)),
+            ot_losses=int(percentile_values.get("ot_losses", 0)),
+            ot_losses_rank=0,
+            shutouts=int(percentile_values.get("shutouts", 0)),
+            shutouts_rank=0,
+            win_percentage=percentile_values.get("win_percentage", 0.0),
+            win_percentage_rank=0,
             games_played_rank=0,
             goals_allowed_rank=0,
             shots_faced_rank=0,
@@ -240,6 +256,12 @@ def aggregate_goalie_stats(
                 "shots_faced": 0,
                 "goals_allowed_per_game": 0.0,
                 "save_percentage": 0.0,
+                "wins": 0,
+                "losses": 0,
+                "ties": 0,
+                "ot_losses": 0,
+                "shutouts": 0,
+                "win_percentage": 0.0,
                 "game_ids": [],
                 "first_game_id": None,
                 "last_game_id": None,
@@ -277,6 +299,74 @@ def aggregate_goalie_stats(
     # Ensure all keys have valid human_id values
     stats_dict = {key: value for key, value in stats_dict.items() if key[1] is not None}
 
+    # Compute win/loss/tie/ot_loss/shutout counts per goalie
+    # Query per-game data to determine results
+    win_loss_query = (
+        session.query(
+            GoalieSaves.goalie_id.label("human_id"),
+            GoalieSaves.game_id,
+            Game.home_goalie_id,
+            Game.visitor_goalie_id,
+            Game.home_final_score,
+            Game.visitor_final_score,
+            Game.went_to_ot,
+            Game.status,
+            GoalieSaves.goals_allowed,
+        )
+        .join(Game, GoalieSaves.game_id == Game.id)
+        .filter(
+            (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
+        )
+        .join(Division, Game.division_id == Division.id)
+        .filter(filter_condition)
+    )
+
+    if debug_human_id:
+        win_loss_query = win_loss_query.filter(GoalieSaves.goalie_id == debug_human_id)
+
+    win_loss_results = win_loss_query.all()
+
+    for row in win_loss_results:
+        key = (aggregation_id, row.human_id)
+        if key not in stats_dict:
+            continue
+
+        if row.home_final_score is None or row.visitor_final_score is None:
+            continue
+
+        is_home = (row.human_id == row.home_goalie_id)
+        is_visitor = (row.human_id == row.visitor_goalie_id)
+
+        if is_home:
+            my_score, opp_score = row.home_final_score, row.visitor_final_score
+        elif is_visitor:
+            my_score, opp_score = row.visitor_final_score, row.home_final_score
+        else:
+            continue  # Cannot determine side
+
+        is_ot = bool(row.went_to_ot) or (row.status or "") in (
+            "Final/OT", "Final/OT2", "Final/SO", "Final(SO)"
+        )
+
+        if my_score > opp_score:
+            stats_dict[key]["wins"] += 1
+        elif my_score < opp_score:
+            if is_ot:
+                stats_dict[key]["ot_losses"] += 1
+            else:
+                stats_dict[key]["losses"] += 1
+        else:
+            stats_dict[key]["ties"] += 1
+
+        if row.goals_allowed == 0:
+            stats_dict[key]["shutouts"] += 1
+
+    # Compute win_percentage
+    for key, stat in stats_dict.items():
+        total_decisions = stat["wins"] + stat["losses"] + stat["ot_losses"] + stat["ties"]
+        if total_decisions > 0:
+            stat["win_percentage"] = stat["wins"] / total_decisions
+
     # Populate first_game_id and last_game_id
     for key, stat in stats_dict.items():
         all_game_ids = stat["game_ids"]
@@ -307,6 +397,11 @@ def aggregate_goalie_stats(
     assign_ranks(stats_dict, "shots_faced")
     assign_ranks(stats_dict, "goals_allowed_per_game", reverse_rank=True)
     assign_ranks(stats_dict, "save_percentage")
+    assign_ranks(stats_dict, "wins")
+    assign_ranks(stats_dict, "losses", reverse_rank=True)
+    assign_ranks(stats_dict, "ot_losses", reverse_rank=True)
+    assign_ranks(stats_dict, "shutouts")
+    assign_ranks(stats_dict, "win_percentage")
 
     # Calculate and insert percentile marker records
     insert_percentile_markers_goalie(
@@ -358,6 +453,17 @@ def aggregate_goalie_stats(
             shots_faced=stat["shots_faced"],
             goals_allowed_per_game=goals_allowed_per_game,
             save_percentage=save_percentage,
+            wins=stat["wins"],
+            wins_rank=stat["wins_rank"],
+            losses=stat["losses"],
+            losses_rank=stat["losses_rank"],
+            ties=stat["ties"],
+            ot_losses=stat["ot_losses"],
+            ot_losses_rank=stat["ot_losses_rank"],
+            shutouts=stat["shutouts"],
+            shutouts_rank=stat["shutouts_rank"],
+            win_percentage=stat["win_percentage"],
+            win_percentage_rank=stat["win_percentage_rank"],
             games_played_rank=stat["games_played_rank"],
             goals_allowed_rank=stat["goals_allowed_rank"],
             shots_faced_rank=stat["shots_faced_rank"],
