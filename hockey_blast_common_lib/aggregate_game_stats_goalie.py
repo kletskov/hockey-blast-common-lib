@@ -20,13 +20,144 @@ FINAL_STATUS = "Final"
 FINAL_SO_STATUS = "Final(SO)"
 
 
-def aggregate_game_stats_goalie(session, mode="full", human_id=None):
+def _aggregate_goalie_games(session, game_filter, human_id=None):
+    """Core aggregation logic: query goalie saves for games matching
+    game_filter, then insert non-zero per-game stats records."""
+    non_human_ids = get_non_human_ids(session)
+
+    total_saves_records = (
+        session.query(GoalieSaves)
+        .join(Game, GoalieSaves.game_id == Game.id)
+        .filter(game_filter)
+        .count()
+    )
+    print(f"Processing {total_saves_records} goalie save records...\n")
+
+    if total_saves_records == 0:
+        print("No goalie records to process.\n")
+        return
+
+    goalie_query = (
+        session.query(
+            GoalieSaves.game_id,
+            GoalieSaves.goalie_id.label("human_id"),
+            GameRoster.team_id,
+            Game.org_id,
+            Division.level_id,
+            Game.date.label("game_date"),
+            Game.time.label("game_time"),
+            GoalieSaves.goals_allowed,
+            GoalieSaves.shots_against.label("shots_faced"),
+            GoalieSaves.saves_count.label("saves"),
+            Game.home_goalie_id,
+            Game.visitor_goalie_id,
+            Game.home_final_score,
+            Game.visitor_final_score,
+            Game.went_to_ot,
+            Game.status,
+        )
+        .join(Game, GoalieSaves.game_id == Game.id)
+        .join(Division, Game.division_id == Division.id)
+        .join(
+            GameRoster,
+            and_(
+                GameRoster.game_id == GoalieSaves.game_id,
+                GameRoster.human_id == GoalieSaves.goalie_id,
+            ),
+        )
+        .filter(
+            game_filter,
+            GoalieSaves.goalie_id.notin_(non_human_ids),
+        )
+    )
+
+    if human_id:
+        goalie_query = goalie_query.filter(GoalieSaves.goalie_id == human_id)
+
+    goalie_records = goalie_query.all()
+
+    print(f"Found {len(goalie_records)} goalie save records\n")
+
+    nonzero_records = [record for record in goalie_records if record.shots_faced > 0]
+
+    print(f"Filtered: {len(nonzero_records)} non-zero records (from {len(goalie_records)} total)\n")
+
+    batch_size = 1000
+    total_records = len(nonzero_records)
+
+    if total_records == 0:
+        print("No non-zero records to insert.\n")
+    else:
+        progress = create_progress_tracker(total_records, "Inserting per-game goalie stats")
+
+        records_to_insert = []
+        for i, record in enumerate(nonzero_records, 1):
+            if record.shots_faced > 0:
+                save_percentage = (record.shots_faced - record.goals_allowed) / record.shots_faced
+            else:
+                save_percentage = 0.0
+
+            # Determine game result (W/L/T/OTL)
+            result = None
+            shutout = (record.goals_allowed == 0)
+            if record.home_final_score is not None and record.visitor_final_score is not None:
+                is_home = (record.human_id == record.home_goalie_id)
+                is_visitor = (record.human_id == record.visitor_goalie_id)
+                if is_home:
+                    my_score, opp_score = record.home_final_score, record.visitor_final_score
+                elif is_visitor:
+                    my_score, opp_score = record.visitor_final_score, record.home_final_score
+                else:
+                    my_score, opp_score = None, None
+
+                if my_score is not None and opp_score is not None:
+                    is_ot = bool(record.went_to_ot) or (record.status or "") in (
+                        "Final/OT", "Final/OT2", "Final/SO", "Final(SO)"
+                    )
+                    if my_score > opp_score:
+                        result = "W"
+                    elif my_score < opp_score:
+                        result = "OTL" if is_ot else "L"
+                    else:
+                        result = "T"
+
+            game_stats_record = GameStatsGoalie(
+                game_id=record.game_id,
+                human_id=record.human_id,
+                team_id=record.team_id,
+                org_id=record.org_id,
+                level_id=record.level_id,
+                game_date=record.game_date,
+                game_time=record.game_time,
+                goals_allowed=record.goals_allowed,
+                shots_faced=record.shots_faced,
+                saves=record.saves,
+                save_percentage=save_percentage,
+                result=result,
+                shutout=shutout,
+                created_at=datetime.utcnow(),
+            )
+
+            records_to_insert.append(game_stats_record)
+
+            if i % batch_size == 0 or i == total_records:
+                session.bulk_save_objects(records_to_insert)
+                session.commit()
+                records_to_insert = []
+                progress.update(i)
+
+        print("\nInsert complete.\n")
+
+
+def aggregate_game_stats_goalie(session, mode="full", human_id=None, game_ids=None):
     """Aggregate per-game goalie statistics.
 
     Args:
         session: Database session
         mode: "full" to regenerate all records, "append" to process new games only
         human_id: Optional human_id to process only one goalie (for testing/debugging)
+        game_ids: Optional list of game IDs to process (fast path for pipeline use).
+                  When provided, only these games are aggregated. Overrides mode.
 
     The function stores individual game performance for each goalie with non-zero stats.
     Only games where the goalie faced at least one shot are saved.
@@ -38,6 +169,33 @@ def aggregate_game_stats_goalie(session, mode="full", human_id=None):
     Note: Uses GameStatsGoalie table but shares sentinel tracking with GameStatsSkater
     since both are per-game stats that should be processed together.
     """
+
+    # Fast path: process only specified game IDs (used by pipeline after loading games)
+    if game_ids:
+        final_ids = [
+            gid for (gid,) in session.query(Game.id)
+            .filter(Game.id.in_(game_ids), Game.status.like("Final%"))
+            .all()
+        ]
+        if not final_ids:
+            print(f"No Final games in {len(game_ids)} provided game_ids, skipping goalie stats.\n")
+            return
+
+        print(f"Aggregating per-game goalie stats for {len(final_ids)} games (of {len(game_ids)} provided)...")
+
+        delete_count = (
+            session.query(GameStatsGoalie)
+            .filter(GameStatsGoalie.game_id.in_(final_ids))
+            .delete(synchronize_session=False)
+        )
+        session.commit()
+        if delete_count:
+            print(f"  Deleted {delete_count} existing records for these games")
+
+        game_filter = Game.id.in_(final_ids)
+        _aggregate_goalie_games(session, game_filter, human_id)
+        print("Per-game goalie stats complete.\n")
+        return
 
     # Get Incognito Human for sentinel tracking (first_name="Incognito", middle_name="", last_name="Human")
     incognito_human = session.query(Human).filter_by(
@@ -123,110 +281,7 @@ def aggregate_game_stats_goalie(session, mode="full", human_id=None):
             ) >= start_datetime,
         )
 
-    # Count total GoalieSaves records to process for progress tracking
-    total_saves_records = (
-        session.query(GoalieSaves)
-        .join(Game, GoalieSaves.game_id == Game.id)
-        .filter(game_filter)
-        .count()
-    )
-    print(f"Processing {total_saves_records} goalie save records...\n")
-
-    if total_saves_records == 0:
-        print("No goalie records to process.\n")
-        return
-
-    # Query goalie saves joined with game metadata and roster
-    # GoalieSaves already has per-game goalie data
-    goalie_query = (
-        session.query(
-            GoalieSaves.game_id,
-            GoalieSaves.goalie_id.label("human_id"),
-            GameRoster.team_id,
-            Game.org_id,
-            Division.level_id,
-            Game.date.label("game_date"),
-            Game.time.label("game_time"),
-            GoalieSaves.goals_allowed,
-            GoalieSaves.shots_against.label("shots_faced"),
-            GoalieSaves.saves_count.label("saves"),
-        )
-        .join(Game, GoalieSaves.game_id == Game.id)
-        .join(Division, Game.division_id == Division.id)
-        .join(
-            GameRoster,
-            and_(
-                GameRoster.game_id == GoalieSaves.game_id,
-                GameRoster.human_id == GoalieSaves.goalie_id,
-            ),
-        )
-        .filter(
-            game_filter,
-            GoalieSaves.goalie_id.notin_(non_human_ids),  # Filter placeholder humans
-        )
-    )
-
-    # Add human_id filter if specified
-    if human_id:
-        goalie_query = goalie_query.filter(GoalieSaves.goalie_id == human_id)
-
-    goalie_records = goalie_query.all()
-
-    print(f"Found {len(goalie_records)} goalie save records\n")
-
-    # Filter to only non-zero stats (CRITICAL for RAG efficiency)
-    # Only save records where goalie faced at least one shot
-    print("Filtering to non-zero records...")
-    nonzero_records = [record for record in goalie_records if record.shots_faced > 0]
-
-    print(f"Filtered: {len(nonzero_records)} non-zero records (from {len(goalie_records)} total)\n")
-
-    # DISABLED: Bulk insert of goalie records - should only update current game participants
-    # TODO: Re-enable with incremental logic that only processes games from the last run
-    #
-    # Insert records in batches with progress tracking
-    # batch_size = 1000
-    # total_records = len(nonzero_records)
-    #
-    # if total_records == 0:
-    #     print("No non-zero records to insert.\n")
-    # else:
-    #     progress = create_progress_tracker(total_records, "Inserting per-game goalie stats")
-    #
-    #     records_to_insert = []
-    #     for i, record in enumerate(nonzero_records, 1):
-    #         # Calculate save percentage
-    #         if record.shots_faced > 0:
-    #             save_percentage = (record.shots_faced - record.goals_allowed) / record.shots_faced
-    #         else:
-    #             save_percentage = 0.0
-    #
-    #         game_stats_record = GameStatsGoalie(
-    #             game_id=record.game_id,
-    #             human_id=record.human_id,
-    #             team_id=record.team_id,
-    #             org_id=record.org_id,
-    #             level_id=record.level_id,
-    #             game_date=record.game_date,
-    #             game_time=record.game_time,
-    #             goals_allowed=record.goals_allowed,
-    #             shots_faced=record.shots_faced,
-    #             saves=record.saves,
-    #             save_percentage=save_percentage,
-    #             created_at=datetime.utcnow(),
-    #         )
-    #
-    #         records_to_insert.append(game_stats_record)
-    #
-    #         # Commit in batches
-    #         if i % batch_size == 0 or i == total_records:
-    #             session.bulk_save_objects(records_to_insert)
-    #             session.commit()
-    #             records_to_insert = []
-    #             progress.update(i)
-    #
-    #     print("\nInsert complete.\n")
-    print(f"SKIPPED: Bulk insert of {len(nonzero_records)} goalie records disabled - should only update current game participants\n")
+    _aggregate_goalie_games(session, game_filter, human_id)
 
     print(f"\n{'='*80}")
     print("Per-game goalie statistics aggregation complete")
