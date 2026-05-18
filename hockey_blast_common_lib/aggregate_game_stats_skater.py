@@ -20,13 +20,15 @@ FINAL_STATUS = "Final"
 FINAL_SO_STATUS = "Final(SO)"
 
 
-def aggregate_game_stats_skater(session, mode="full", human_id=None):
+def aggregate_game_stats_skater(session, mode="full", human_id=None, game_ids=None):
     """Aggregate per-game skater statistics.
 
     Args:
         session: Database session
         mode: "full" to regenerate all records, "append" to process new games only
         human_id: Optional human_id to process only one player (for testing/debugging)
+        game_ids: Optional list of game IDs to process (fast path for pipeline use).
+                  When provided, only these games are aggregated. Overrides mode.
 
     The function stores individual game performance for each skater with non-zero stats.
     Only games where the player recorded at least one goal, assist, or penalty minute are saved.
@@ -35,6 +37,100 @@ def aggregate_game_stats_skater(session, mode="full", human_id=None):
     Uses Incognito Human sentinel record (game_id=-1) to track last processed timestamp
     for append mode with 1-day overlap to catch data corrections.
     """
+
+    # Fast path: process only specified game IDs (used by pipeline after loading games)
+    if game_ids:
+        final_ids = [
+            gid for (gid,) in session.query(Game.id)
+            .filter(Game.id.in_(game_ids), Game.status.like("Final%"))
+            .all()
+        ]
+        if not final_ids:
+            print(f"No Final games in {len(game_ids)} provided game_ids, skipping skater stats.\n")
+            return
+
+        print(f"Aggregating per-game skater stats for {len(final_ids)} games (of {len(game_ids)} provided)...")
+
+        delete_count = (
+            session.query(GameStatsSkater)
+            .filter(GameStatsSkater.game_id.in_(final_ids))
+            .delete(synchronize_session=False)
+        )
+        session.commit()
+        if delete_count:
+            print(f"  Deleted {delete_count} existing records for these games")
+
+        non_human_ids = get_non_human_ids(session)
+        gf = Game.id.in_(final_ids)
+
+        roster_entries = (
+            session.query(
+                GameRoster.game_id, GameRoster.human_id, GameRoster.team_id,
+                Game.org_id, Division.level_id,
+                Game.date.label("game_date"), Game.time.label("game_time"),
+            )
+            .join(Game, GameRoster.game_id == Game.id)
+            .join(Division, Game.division_id == Division.id)
+            .filter(~GameRoster.role.ilike("g"), GameRoster.human_id.notin_(non_human_ids), gf)
+            .all()
+        )
+
+        roster_dict = {}
+        for entry in roster_entries:
+            roster_dict[(entry.game_id, entry.human_id)] = {
+                "team_id": entry.team_id, "org_id": entry.org_id,
+                "level_id": entry.level_id, "game_date": entry.game_date,
+                "game_time": entry.game_time,
+                "goals": 0, "assists": 0, "points": 0, "penalty_minutes": 0,
+            }
+
+        for goal in session.query(Goal).join(Game, Goal.game_id == Game.id).filter(gf).all():
+            key = (goal.game_id, goal.goal_scorer_id)
+            if key in roster_dict:
+                roster_dict[key]["goals"] += 1
+                roster_dict[key]["points"] += 1
+            if goal.assist_1_id:
+                key = (goal.game_id, goal.assist_1_id)
+                if key in roster_dict:
+                    roster_dict[key]["assists"] += 1
+                    roster_dict[key]["points"] += 1
+            if goal.assist_2_id:
+                key = (goal.game_id, goal.assist_2_id)
+                if key in roster_dict:
+                    roster_dict[key]["assists"] += 1
+                    roster_dict[key]["points"] += 1
+
+        for penalty in session.query(Penalty).join(Game, Penalty.game_id == Game.id).filter(gf).all():
+            key = (penalty.game_id, penalty.penalized_player_id)
+            if key in roster_dict:
+                if penalty.penalty_minutes and penalty.penalty_minutes.upper() == "GM":
+                    roster_dict[key]["penalty_minutes"] += 10
+                else:
+                    try:
+                        roster_dict[key]["penalty_minutes"] += int(penalty.penalty_minutes or 0)
+                    except (ValueError, TypeError):
+                        pass
+
+        records_to_insert = [
+            GameStatsSkater(
+                game_id=game_id, human_id=hid, team_id=s["team_id"],
+                org_id=s["org_id"], level_id=s["level_id"],
+                game_date=s["game_date"], game_time=s["game_time"],
+                goals=s["goals"], assists=s["assists"],
+                points=s["points"], penalty_minutes=s["penalty_minutes"],
+                created_at=datetime.utcnow(),
+            )
+            for (game_id, hid), s in roster_dict.items()
+            if s["goals"] > 0 or s["assists"] > 0 or s["penalty_minutes"] > 0
+        ]
+
+        if records_to_insert:
+            session.bulk_save_objects(records_to_insert)
+            session.commit()
+            print(f"  Inserted {len(records_to_insert)} per-game skater records")
+
+        print("Per-game skater stats complete.\n")
+        return
 
     # Get Incognito Human for sentinel tracking (first_name="Incognito", middle_name="", last_name="Human")
     incognito_human = session.query(Human).filter_by(
