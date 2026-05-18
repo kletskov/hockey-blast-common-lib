@@ -6,6 +6,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from hockey_blast_common_lib.aggregate_goalie_stats import run_aggregate_goalie_stats
+from hockey_blast_common_lib.process_hb_claims import process_hb_claims
 from hockey_blast_common_lib.aggregate_human_stats import run_aggregate_human_stats
 from hockey_blast_common_lib.aggregate_referee_stats import run_aggregate_referee_stats
 from hockey_blast_common_lib.aggregate_scorekeeper_stats import (
@@ -79,6 +80,13 @@ def populate_human_games_fresh(session):
 
 
 if __name__ == "__main__":
+    print("Processing HB profile claim merges...", flush=True)
+    try:
+        process_hb_claims()
+    except Exception as e:
+        print(f"WARNING: HB claim processing failed: {e}", flush=True)
+        print("Continuing with stats aggregation...\n", flush=True)
+
     print("Running aggregate_skater_stats...", flush=True)
     run_aggregate_skater_stats()
     print("Finished running aggregate_skater_stats\n")
