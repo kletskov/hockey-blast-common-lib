@@ -15,9 +15,7 @@ from hockey_blast_common_lib.progress_utils import create_progress_tracker
 from hockey_blast_common_lib.stats_models import GameStatsGoalie
 from hockey_blast_common_lib.utils import get_non_human_ids
 
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
+from hockey_blast_common_lib.game_status_constants import STATS_STATUSES
 
 
 def aggregate_game_stats_goalie(session, mode="full", human_id=None):
@@ -113,7 +111,7 @@ def aggregate_game_stats_goalie(session, mode="full", human_id=None):
         print(f"Full mode: Deleted {delete_count} existing records\n")
 
     # Build game filter for eligible games
-    game_filter = Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS])
+    game_filter = Game.status_id.in_(STATS_STATUSES)
     if mode == "append" and start_datetime:
         game_filter = and_(
             game_filter,

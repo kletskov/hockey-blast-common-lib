@@ -45,11 +45,9 @@ from hockey_blast_common_lib.utils import (
     get_start_datetime,
 )
 
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
-FORFEIT_STATUS = "FORFEIT"
-NOEVENTS_STATUS = "NOEVENTS"
+from hockey_blast_common_lib.game_status_constants import (
+    COMPLETED_STATUSES, STATS_STATUSES,
+)
 
 
 def calculate_current_point_streak(session, human_id, filter_condition):
@@ -85,8 +83,7 @@ def calculate_current_point_streak(session, human_id, filter_condition):
             GameRoster.human_id == human_id,
             ~GameRoster.role.ilike("g"),  # Exclude goalie games
             filter_condition,
-            (Game.status.like("Final%"))
-            | (Game.status == "NOEVENTS"),  # Include Final and NOEVENTS games
+            Game.status_id.in_(COMPLETED_STATUSES),  # Include all completed games
         )
         .group_by(Game.id, Game.date, Game.time)
         .order_by(Game.date.desc(), Game.time.desc())
@@ -166,7 +163,7 @@ def calculate_all_point_streaks_batch(session, human_ids, filter_condition):
             GameRoster.human_id.in_(human_ids),  # ← ALL players at once!
             ~GameRoster.role.ilike("g"),  # Exclude goalie games
             filter_condition,
-            (Game.status.like("Final%")) | (Game.status == "NOEVENTS"),
+            Game.status_id.in_(COMPLETED_STATUSES),
         )
         .group_by(GameRoster.human_id, Game.id, Game.date, Game.time)
         .order_by(
@@ -416,7 +413,7 @@ def aggregate_skater_stats(
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
             .filter(
                 filter_condition,
-                (Game.status.like("Final%")) | (Game.status == "NOEVENTS"),
+                Game.status_id.in_(COMPLETED_STATUSES),
             )
             .scalar()
         )
@@ -452,9 +449,7 @@ def aggregate_skater_stats(
         )
         .join(Game, Game.id == GameRoster.game_id)
         .filter(
-            Game.status.in_(
-                [FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS]
-            )
+            Game.status_id.in_(COMPLETED_STATUSES)
         )
     )
 

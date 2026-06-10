@@ -42,11 +42,9 @@ from hockey_blast_common_lib.utils import (
     get_start_datetime,
 )
 
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
-FORFEIT_STATUS = "FORFEIT"
-NOEVENTS_STATUS = "NOEVENTS"
+from hockey_blast_common_lib.game_status_constants import (
+    COMPLETED_STATUSES, STATS_STATUSES,
+)
 
 
 def insert_percentile_markers_goalie(
@@ -180,7 +178,7 @@ def aggregate_goalie_stats(
     if aggregation_window:
         last_game_datetime_str = (
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
-            .filter(filter_condition, Game.status.like("Final%"))
+            .filter(filter_condition, Game.status_id.in_(STATS_STATUSES))
             .scalar()
         )
         start_datetime = get_start_datetime(last_game_datetime_str, aggregation_window)
@@ -212,9 +210,7 @@ def aggregate_goalie_stats(
         )
         .join(Game, GoalieSaves.game_id == Game.id)
         .filter(
-            Game.status.in_(
-                [FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS]
-            )
+            Game.status_id.in_(COMPLETED_STATUSES)
         )
         .join(Division, Game.division_id == Division.id)
         .filter(filter_condition)

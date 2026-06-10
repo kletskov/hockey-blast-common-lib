@@ -3,6 +3,12 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+class GameStatus(db.Model):
+    __tablename__ = "game_statuses"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+
+
 # DEPRECATED - comments
 class Comment(db.Model):
     __tablename__ = "comments"
@@ -44,6 +50,7 @@ class Game(db.Model):
     __tablename__ = "games"
     id = db.Column(db.Integer, primary_key=True)
     status = db.Column(db.String(255), nullable=False, default="")
+    status_id = db.Column(db.Integer, db.ForeignKey("game_statuses.id"), nullable=False)
     last_update_ts = db.Column(
         db.DateTime, nullable=False, default=db.func.current_timestamp()
     )

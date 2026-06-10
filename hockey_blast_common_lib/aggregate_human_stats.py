@@ -35,6 +35,7 @@ from hockey_blast_common_lib.utils import (
     get_non_human_ids,
     get_start_datetime,
 )
+from hockey_blast_common_lib.game_status_constants import COMPLETED_STATUSES
 
 
 def aggregate_human_stats(
@@ -108,7 +109,7 @@ def aggregate_human_stats(
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
             .filter(
                 filter_condition,
-                (Game.status.like("Final%")) | (Game.status == "NOEVENTS"),
+                Game.status_id.in_(COMPLETED_STATUSES),
             )
             .scalar()
         )
@@ -128,7 +129,7 @@ def aggregate_human_stats(
         human_filter = [GameRoster.human_id == human_id_filter]
 
     # Filter games by status - include both Final and NOEVENTS games
-    game_status_filter = (Game.status.like("Final%")) | (Game.status == "NOEVENTS")
+    game_status_filter = Game.status_id.in_(COMPLETED_STATUSES)
 
     # Aggregate skater games played
     skater_stats = (

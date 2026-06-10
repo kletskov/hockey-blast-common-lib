@@ -48,7 +48,7 @@ def populate_human_games_fresh(session):
             0 as last_processed_games_count
         FROM game_rosters gr
         JOIN games g ON gr.game_id = g.id
-        WHERE g.status LIKE 'Final%' OR g.status = 'NOEVENTS'
+        WHERE g.status_id IN (3,4,5,6,7)
         GROUP BY gr.human_id;
     """)
 

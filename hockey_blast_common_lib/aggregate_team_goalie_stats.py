@@ -45,11 +45,9 @@ from hockey_blast_common_lib.utils import (
     get_percentile_human,
 )
 
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
-FORFEIT_STATUS = "FORFEIT"
-NOEVENTS_STATUS = "NOEVENTS"
+from hockey_blast_common_lib.game_status_constants import (
+    COMPLETED_STATUSES, STATS_STATUSES,
+)
 
 
 def aggregate_team_goalie_stats(session, aggregation_type, aggregation_id):
@@ -135,7 +133,7 @@ def aggregate_team_goalie_stats(session, aggregation_type, aggregation_id):
                 GameRoster.team_id == team_id,  # KEY: Filter by team
                 GameRoster.role.ilike("g"),  # Only goalies
                 GameRoster.human_id.notin_(human_ids_to_filter),
-                Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS, FORFEIT_STATUS, NOEVENTS_STATUS]),
+                Game.status_id.in_(COMPLETED_STATUSES),
                 filter_condition,  # org_id or division_id filter
             )
             .group_by(GameRoster.human_id)
@@ -174,7 +172,7 @@ def aggregate_team_goalie_stats(session, aggregation_type, aggregation_id):
                 GameRoster.team_id == team_id,  # KEY: Filter by team
                 GameRoster.role.ilike("g"),
                 GameRoster.human_id.in_(stats_dict.keys()),
-                Game.status.in_([FINAL_STATUS, FINAL_SO_STATUS]),
+                Game.status_id.in_(STATS_STATUSES),
                 filter_condition,
             )
             .group_by(GameRoster.human_id)
