@@ -32,6 +32,7 @@ from hockey_blast_common_lib.stats_models import (
     OrgStatsGoalie,
     OrgStatsWeeklyGoalie,
 )
+from hockey_blast_common_lib.game_status import StatusId, FINAL_STATUS_IDS, PARTICIPATED_STATUS_IDS
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.utils import (
     assign_ranks,
@@ -41,12 +42,6 @@ from hockey_blast_common_lib.utils import (
     get_percentile_human,
     get_start_datetime,
 )
-
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
-FORFEIT_STATUS = "FORFEIT"
-NOEVENTS_STATUS = "NOEVENTS"
 
 
 def insert_percentile_markers_goalie(
@@ -191,7 +186,7 @@ def aggregate_goalie_stats(
     if aggregation_window:
         last_game_datetime_str = (
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
-            .filter(filter_condition, Game.status.like("Final%"))
+            .filter(filter_condition, Game.status_id.in_(FINAL_STATUS_IDS))
             .scalar()
         )
         start_datetime = get_start_datetime(last_game_datetime_str, aggregation_window)
@@ -229,7 +224,7 @@ def aggregate_goalie_stats(
         )
         .join(Game, GoalieSaves.game_id == Game.id)
         .filter(
-            (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
+            Game.status_id.in_(PARTICIPATED_STATUS_IDS)
         )
         .join(Division, Game.division_id == Division.id)
         .filter(filter_condition)
@@ -310,12 +305,12 @@ def aggregate_goalie_stats(
             Game.home_final_score,
             Game.visitor_final_score,
             Game.went_to_ot,
-            Game.status,
+            Game.status_id,
             GoalieSaves.goals_allowed,
         )
         .join(Game, GoalieSaves.game_id == Game.id)
         .filter(
-            (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
+            Game.status_id.in_(PARTICIPATED_STATUS_IDS)
         )
         .join(Division, Game.division_id == Division.id)
         .filter(filter_condition)
@@ -344,9 +339,7 @@ def aggregate_goalie_stats(
         else:
             continue  # Cannot determine side
 
-        is_ot = bool(row.went_to_ot) or (row.status or "") in (
-            "Final/OT", "Final/OT2", "Final/SO", "Final(SO)"
-        )
+        is_ot = bool(row.went_to_ot) or row.status_id in (StatusId.FINAL_OT, StatusId.FINAL_SO)
 
         if my_score > opp_score:
             stats_dict[key]["wins"] += 1

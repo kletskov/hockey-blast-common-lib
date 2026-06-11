@@ -12,12 +12,9 @@ from sqlalchemy.exc import IntegrityError
 from hockey_blast_common_lib.db_connection import create_session
 from hockey_blast_common_lib.models import Division, Game, GameRoster, Goal, Human, Penalty
 from hockey_blast_common_lib.progress_utils import create_progress_tracker
+from hockey_blast_common_lib.game_status import FINAL_STATUS_IDS
 from hockey_blast_common_lib.stats_models import GameStatsSkater
 from hockey_blast_common_lib.utils import get_non_human_ids
-
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
 
 
 def aggregate_game_stats_skater(session, mode="full", human_id=None, game_ids=None):
@@ -42,7 +39,7 @@ def aggregate_game_stats_skater(session, mode="full", human_id=None, game_ids=No
     if game_ids:
         final_ids = [
             gid for (gid,) in session.query(Game.id)
-            .filter(Game.id.in_(game_ids), Game.status.like("Final%"))
+            .filter(Game.id.in_(game_ids), Game.status_id.in_(FINAL_STATUS_IDS))
             .all()
         ]
         if not final_ids:
@@ -206,7 +203,7 @@ def aggregate_game_stats_skater(session, mode="full", human_id=None, game_ids=No
         print(f"Full mode: Deleted {delete_count} existing records\n")
 
     # Build game filter for eligible games
-    game_filter = Game.status.like("Final%")
+    game_filter = Game.status_id.in_(FINAL_STATUS_IDS)
     if mode == "append" and start_datetime:
         game_filter = and_(
             game_filter,

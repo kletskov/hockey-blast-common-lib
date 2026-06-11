@@ -22,6 +22,7 @@ from hockey_blast_common_lib.stats_models import (
     OrgStatsWeeklyScorekeeper,
 )
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
+from hockey_blast_common_lib.game_status import FINAL_STATUS_IDS, PARTICIPATED_STATUS_IDS
 from hockey_blast_common_lib.utils import (
     assign_ranks,
     calculate_percentile_value,
@@ -29,12 +30,6 @@ from hockey_blast_common_lib.utils import (
     get_percentile_human,
     get_start_datetime,
 )
-
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
-FORFEIT_STATUS = "FORFEIT"
-NOEVENTS_STATUS = "NOEVENTS"
 
 
 def insert_percentile_markers_scorekeeper(
@@ -179,7 +174,7 @@ def aggregate_scorekeeper_stats(
     if aggregation_window:
         last_game_datetime_str = (
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
-            .filter(filter_condition, Game.status.like("Final%"))
+            .filter(filter_condition, Game.status_id.in_(FINAL_STATUS_IDS))
             .scalar()
         )
         start_datetime = get_start_datetime(last_game_datetime_str, aggregation_window)
@@ -234,7 +229,7 @@ def aggregate_scorekeeper_stats(
         )
         .join(Game, Game.id == ScorekeeperSaveQuality.game_id)
         .filter(
-            (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
+            Game.status_id.in_(PARTICIPATED_STATUS_IDS)
         )
     )
 

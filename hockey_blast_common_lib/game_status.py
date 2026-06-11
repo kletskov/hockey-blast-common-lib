@@ -22,6 +22,7 @@ class StatusId:
 
 FINAL_STATUS_IDS = frozenset({StatusId.FINAL, StatusId.FINAL_OT, StatusId.FINAL_SO})
 COMPLETED_STATUS_IDS = frozenset({StatusId.FINAL, StatusId.FINAL_OT, StatusId.FINAL_SO, StatusId.FORFEIT})
+PARTICIPATED_STATUS_IDS = frozenset({StatusId.FINAL, StatusId.FINAL_OT, StatusId.FINAL_SO, StatusId.FORFEIT, StatusId.NOEVENTS})
 PENDING_STATUS_IDS = frozenset({StatusId.SCHEDULED, StatusId.NOT_STARTED, StatusId.OPEN})
 
 STATUS_NAMES = {

@@ -22,11 +22,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import func, case, text
 
+from hockey_blast_common_lib.game_status import StatusId, PARTICIPATED_STATUS_IDS
+
 from hockey_blast_common_lib.db_connection import create_session_boss
 from hockey_blast_common_lib.models import Division, Game, Team
 from hockey_blast_common_lib.stats_models import DivisionTeamStandings
-
-FINAL_STATUSES = ("Final", "Final.", "Final/OT", "Final/OT2", "Final/SO", "Final(SO)", "NOEVENTS", "FORFEIT")
 
 
 def aggregate_division_team_standings(session, division_id: int) -> int:
@@ -43,7 +43,7 @@ def aggregate_division_team_standings(session, division_id: int) -> int:
         session.query(Game)
         .filter(
             Game.division_id == division_id,
-            Game.status.in_(FINAL_STATUSES),
+            Game.status_id.in_(PARTICIPATED_STATUS_IDS),
             Game.home_team_id.isnot(None),
             Game.visitor_team_id.isnot(None),
             Game.home_final_score.isnot(None),
@@ -70,7 +70,7 @@ def aggregate_division_team_standings(session, division_id: int) -> int:
     for g in games:
         h = g.home_final_score
         v = g.visitor_final_score
-        is_ot = bool(g.went_to_ot) or g.status in ("Final/OT", "Final/OT2", "Final/SO", "Final(SO)")
+        is_ot = bool(g.went_to_ot) or g.status_id in (StatusId.FINAL_OT, StatusId.FINAL_SO)
 
         ht = _get(g.home_team_id)
         vt = _get(g.visitor_team_id)
@@ -170,7 +170,7 @@ def run_aggregate_division_team_standings():
         # Find all divisions that have at least one completed game
         divisions_with_games = (
             session.query(Game.division_id)
-            .filter(Game.status.in_(FINAL_STATUSES))
+            .filter(Game.status_id.in_(PARTICIPATED_STATUS_IDS))
             .distinct()
             .all()
         )
