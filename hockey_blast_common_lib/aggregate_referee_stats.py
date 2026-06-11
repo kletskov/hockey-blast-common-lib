@@ -27,6 +27,7 @@ from hockey_blast_common_lib.stats_models import (
     OrgStatsReferee,
     OrgStatsWeeklyReferee,
 )
+from hockey_blast_common_lib.game_status import FINAL_STATUS_IDS, PARTICIPATED_STATUS_IDS
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.utils import (
     assign_ranks,
@@ -36,12 +37,6 @@ from hockey_blast_common_lib.utils import (
     get_percentile_human,
     get_start_datetime,
 )
-
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
-FORFEIT_STATUS = "FORFEIT"
-NOEVENTS_STATUS = "NOEVENTS"
 
 
 def insert_percentile_markers_referee(
@@ -155,7 +150,7 @@ def aggregate_referee_stats(
     if aggregation_window:
         last_game_datetime_str = (
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
-            .filter(filter_condition, Game.status.like("Final%"))
+            .filter(filter_condition, Game.status_id.in_(FINAL_STATUS_IDS))
             .scalar()
         )
         start_datetime = get_start_datetime(last_game_datetime_str, aggregation_window)
@@ -179,7 +174,7 @@ def aggregate_referee_stats(
     # games_participated: Count FINAL, FINAL_SO, FORFEIT, NOEVENTS
     # games_with_stats: Count only FINAL, FINAL_SO (for per-game averages)
     # Filter by game status upfront for performance
-    status_filter = (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
+    status_filter = Game.status_id.in_(PARTICIPATED_STATUS_IDS)
 
     games_reffed_stats = (
         session.query(

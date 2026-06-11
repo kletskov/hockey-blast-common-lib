@@ -38,6 +38,7 @@ from hockey_blast_common_lib.stats_models import (
     OrgStatsSkater,
     OrgStatsWeeklySkater,
 )
+from hockey_blast_common_lib.game_status import FINAL_STATUS_IDS, PARTICIPATED_STATUS_IDS
 from hockey_blast_common_lib.stats_utils import ALL_ORGS_ID
 from hockey_blast_common_lib.utils import (
     calculate_percentile_value,
@@ -46,12 +47,6 @@ from hockey_blast_common_lib.utils import (
     get_percentile_human,
     get_start_datetime,
 )
-
-# Import status constants for game filtering
-FINAL_STATUS = "Final"
-FINAL_SO_STATUS = "Final(SO)"
-FORFEIT_STATUS = "FORFEIT"
-NOEVENTS_STATUS = "NOEVENTS"
 
 
 def get_changed_human_ids(session):
@@ -113,8 +108,7 @@ def calculate_current_point_streak(session, human_id, filter_condition):
             GameRoster.human_id == human_id,
             ~GameRoster.role.ilike("g"),  # Exclude goalie games
             filter_condition,
-            (Game.status.like("Final%"))
-            | (Game.status == "NOEVENTS"),  # Include Final and NOEVENTS games
+            Game.status_id.in_(PARTICIPATED_STATUS_IDS),  # Include Final and NOEVENTS games
         )
         .group_by(Game.id, Game.date, Game.time)
         .order_by(Game.date.desc(), Game.time.desc())
@@ -194,7 +188,7 @@ def calculate_all_point_streaks_batch(session, human_ids, filter_condition):
             GameRoster.human_id.in_(human_ids),  # ← ALL players at once!
             ~GameRoster.role.ilike("g"),  # Exclude goalie games
             filter_condition,
-            (Game.status.like("Final%")) | (Game.status == "NOEVENTS"),
+            Game.status_id.in_(PARTICIPATED_STATUS_IDS),
         )
         .group_by(GameRoster.human_id, Game.id, Game.date, Game.time)
         .order_by(
@@ -422,7 +416,7 @@ def aggregate_skater_stats(
                 session.query(func.max(Game.date))
                 .filter(
                     Game.division_id == aggregation_id,
-                    (Game.status.like("Final%")) | (Game.status == "NOEVENTS"),
+                    Game.status_id.in_(PARTICIPATED_STATUS_IDS),
                 )
                 .scalar()
             )
@@ -456,7 +450,7 @@ def aggregate_skater_stats(
             .join(Game, GameRoster.game_id == Game.id)
             .filter(filter_condition)
             .filter(~GameRoster.role.ilike("g"))
-            .filter((Game.status.like("Final%")) | (Game.status == "NOEVENTS"))
+            .filter(Game.status_id.in_(PARTICIPATED_STATUS_IDS))
             .distinct()
             .all()
         )
@@ -470,7 +464,7 @@ def aggregate_skater_stats(
             session.query(func.max(func.concat(Game.date, " ", Game.time)))
             .filter(
                 filter_condition,
-                (Game.status.like("Final%")) | (Game.status == "NOEVENTS"),
+                Game.status_id.in_(PARTICIPATED_STATUS_IDS),
             )
             .scalar()
         )
@@ -512,7 +506,7 @@ def aggregate_skater_stats(
         )
         .join(Game, Game.id == GameRoster.game_id)
         .filter(
-            (Game.status.like("Final%")) | (Game.status.ilike("forfeit")) | (Game.status == "NOEVENTS")
+            Game.status_id.in_(PARTICIPATED_STATUS_IDS)
         )
     )
 
